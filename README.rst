@@ -15,6 +15,8 @@ TOC
 
 Changelog
 ---------
+v1.1.4  - Add to queue button toggles item in queue instead of adding
+
 v1.1.3  - Bugfix for keyboard faving
 
 v1.1.2  - Removes 'Q' from small thumbnails, short filenames for download links.

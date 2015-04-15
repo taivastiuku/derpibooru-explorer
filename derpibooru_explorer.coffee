@@ -284,7 +284,7 @@ window.ThumbnailView = Backbone.View.extend
       short_image: @short_image
 
   queue: ->
-    app.imageQueue.add(@image.id_number)
+    app.imageQueue.toggle(@image.id_number)
     @render()
 
 
@@ -325,7 +325,7 @@ window.ThumbnailInfoView = Backbone.View.extend
         @$el.append("<span class='add-queue'><a><i class='fa fa-plus-square'></i></a></span>")
 
   queue: ->
-    app.imageQueue.add(@imageId)
+    app.imageQueue.toggle(@imageId)
     @render()
 
 
@@ -355,12 +355,31 @@ class ImageQueue
   add: (id) ->
     id = parseInt(id)
     return if isNaN(id)
-    new NotificationView(fa: "fa-cloud-download")
-    console.debug("Added ##{id} to queue")
+    console.debug("Adding ##{id} to queue")
     @load()  # User may have multiple windows open, load to ensure that we
              # have the most current queue.
+    new NotificationView(fa: "fa-cloud-download")
     @queue.push(id)
     @save()
+
+  remove: (id) ->
+    id = parseInt(id)
+    return if isNaN(id)
+    console.debug("Removing ##{id} to queue")
+    @load()
+    new NotificationView(fa: "fa-cloud-download", off: true)
+    @queue = _.filter @queue, (queue_id) -> queue_id != id
+    @save()
+
+  toggle: (id) ->
+    id = parseInt(id)
+    return if isNaN(id)
+    console.debug("Toggling ##{id}")
+    @load()
+    if _.contains(@queue, id)
+      @remove(id)
+    else
+      @add(id)
 
   next: ->
     new NotificationView(fa: "fa-arrow-right")

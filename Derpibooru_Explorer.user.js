@@ -2,7 +2,7 @@
 // @name       Derpibooru Explorer
 // @author     taivastiuku@gmail.com
 // @namespace  https://tiuku.me/
-// @version    1.1.3
+// @version    1.1.4
 
 // @description Add recommendations and UX enhancements to derpiboo.ru
 // @match      https://derpiboo.ru/*
@@ -15,7 +15,7 @@
 // @require    https://tiuku.me/static/lodash.underscore.min.js
 // @require    https://tiuku.me/static/backbone-min.js
 // @require    https://tiuku.me/static/keyboard.min.js
-// @require	   https://tiuku.me/static/derpibooru_explorer.js?1.1.3
+// @require	   https://tiuku.me/static/derpibooru_explorer.js?1.1.4
 // @grant      unsafeWindow
 // ==/UserScript==
 
@@ -74,6 +74,7 @@ window.runDerpibooruExplorer(config);
  *
  * Changelog
  * ---------
+ * v1.1.4  - Add to queue button toggles item in queue instead of adding
  * v1.1.3  - Bugfix for keyboard faving
  * v1.1.2  - Removes 'Q' from small thumbnails, short filenames for download
  *           links.
