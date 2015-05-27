@@ -198,7 +198,8 @@ window.HighlightsView = Backbone.View.extend({
         }
       };
     })(this));
-    return this.$el.append(templates.loadMoreImage());
+    this.$el.append(templates.loadMoreImage());
+    return this.$el.append(" ");
   },
   loadMore: function(event) {
     $(event.target).remove();
@@ -320,9 +321,10 @@ window.ImageView = Backbone.View.extend({
           var hiddenTags;
           hiddenTags = _.intersection(item.tags, booru.hiddenTagList);
           if (hiddenTags.length <= 0) {
-            return _this.$el.append(new ThumbnailView({
+            _this.$el.append(new ThumbnailView({
               image: item
             }).el);
+            return _this.$el.append(" ");
           }
         };
       })(this));
@@ -331,6 +333,7 @@ window.ImageView = Backbone.View.extend({
         this.$el.append(templates.nextInQueueBar());
       } else {
         this.$el.append(templates.loadMoreImage());
+        this.$el.append(" ");
         this.$el.append(templates.nextInQueueImage());
       }
     }
@@ -609,7 +612,7 @@ Session = (function() {
 
 window.templates = {};
 
-window.templates.thumbnail = _.template("<div class='imageinfo normal'> <span> <a href='<%= short_image %>' class='id_number' title='<%- image.id_number %>'><i class='fa fa-image'></i> <%- image.id_number %></a> <span class='fave-span<% if (image.isFaved()) {print('-faved');} %>'> <i class='fa fa-star'></i> <span class='favourites'><%- image.favourites %></span> </span> <i class='fa fa-arrow-up vote-up'></i> <span class='score'><%- image.score %></span> <a href='/<%= image.id_number %>#comments' class='comments_link'><i class='fa fa-comments'></i></a> <% if (image.isQueued()) { %> <span class='add-queue queued'%><a><i class='fa fa-plus-square'></i> in queue</a></span> <% } else { %> <span class='add-queue'><a><i class='fa fa-plus-square'></i> queue</a></span> <% } %> </span> </div> <div class='image_container thumb'> <a href='/<%= image.id_number %>'> <% if (image.isSpoilered()) { print(image.spoileredTags.join(', ')); } else { %> <img src='<%= image.thumb %>' /> <% } %> </a> </div>");
+window.templates.thumbnail = _.template("<div class='imageinfo normal'> <span> <a href='<%= short_image %>' class='id_number' title='<%- image.id_number %>'><i class='fa fa-image'></i> <%- image.id_number %></a> <span class='fave-span<% if (image.isFaved()) {print('-faved');} %>'> <i class='fa fa-star'></i> <span class='favourites'><%- image.favourites %></span> </span> <i class='fa fa-arrow-up vote-up'></i> <span class='score'><%- image.score %></span> <a href='/<%= image.id_number %>#comments' class='comments_link'><i class='fa fa-comments'></i></a> <% if (image.isQueued()) { %> <span class='add-queue queued'%><a><i class='fa fa-plus-square'></i> in queue</a></span> <% } else { %> <span class='add-queue'><a><i class='fa fa-plus-square'></i> queue</a></span> <% } %> </span> </div> <div class='image_container thumb'><a href='/<%= image.id_number %>'><% if (image.isSpoilered()) { print(image.spoileredTags.join(', ')); } else { %><img src='<%= image.thumb %>' /><% } %></a></div>");
 
 window.templates.nextInQueueImage = _.template("<div class='image bigimage recommender next-in-queue'> <div class='imageinfo normal spacer'></div> <div class='image_container thumb'> <a>Next in queue <i class='fa fa-arrow-right'></i></a> </div> </div>");
 
@@ -619,7 +622,7 @@ window.templates.nextInQueueBar = _.template("<div class='image bigimage recomme
 
 window.templates.loadMoreBar = _.template("<div class='image bigimage recommender load-more load-more-bar'> <div> <a>Load more</a> </div> </div>");
 
-window.templates.similarImagesStars = _.template("<div id='similars-title'> <h2>Similar Images</h2> <% _.each(appStars, function(stars, id_number) { %> <% _.each(stars, function(star) { %> <a href='/<%- id_number %>' title='<%- star %>'> <i class='fa fa-star'></i> </a> <% }); }); %> </div>");
+window.templates.similarImagesStars = _.template("<div id='similars-title'> <h6>Similar Images</h6> <% _.each(appStars, function(stars, id_number) { %> <% _.each(stars, function(star) { %> <a href='/<%- id_number %>' title='<%- star %>'> <i class='fa fa-star'></i> </a> <% }); }); %> </div>");
 
 window.templates.artistTag = _.template("<span class='tag tag-ns-artist'> <a href='<%= url %>'><%- name %></a> </span>");
 

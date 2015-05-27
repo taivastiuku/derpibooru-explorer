@@ -2,7 +2,7 @@
 // @name       Derpibooru Explorer
 // @author     taivastiuku@gmail.com
 // @namespace  https://tiuku.me/
-// @version    1.1.4
+// @version    1.1.6
 
 // @description Add recommendations and UX enhancements to derpiboo.ru
 // @match      https://derpiboo.ru/*
@@ -15,7 +15,7 @@
 // @require    https://tiuku.me/static/lodash.underscore.min.js
 // @require    https://tiuku.me/static/backbone-min.js
 // @require    https://tiuku.me/static/keyboard.min.js
-// @require	   https://tiuku.me/static/derpibooru_explorer.js?1.1.4
+// @require	   https://tiuku.me/static/derpibooru_explorer.js?1.1.6
 // @grant      unsafeWindow
 // ==/UserScript==
 
@@ -52,7 +52,8 @@ config = {
     DEBUG: false,
     LOGOUT_ENDS_SESSION: true,
     KEYBOARD_SHORTCUTS: true,
-    HATS: true
+    HATS: true,
+    STARS: true
 }
 window.runDerpibooruExplorer(config);
 
@@ -74,6 +75,8 @@ window.runDerpibooruExplorer(config);
  *
  * Changelog
  * ---------
+ * v1.1.6  - Add and remove significant whitespaces to work with new styling
+ * v1.1.5  - Configuration option to remove stars.
  * v1.1.4  - Add to queue button toggles item in queue instead of adding
  * v1.1.3  - Bugfix for keyboard faving
  * v1.1.2  - Removes 'Q' from small thumbnails, short filenames for download

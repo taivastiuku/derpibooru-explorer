@@ -15,6 +15,10 @@ TOC
 
 Changelog
 ---------
+v1.1.6  - Add and remove significant whitespaces to work with new styling
+
+v1.1.5  - Configuration option to remove stars
+
 v1.1.4  - Add to queue button toggles item in queue instead of adding
 
 v1.1.3  - Bugfix for keyboard faving

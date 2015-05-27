@@ -162,6 +162,7 @@ window.HighlightsView = Backbone.View.extend
       if hiddenTags.length <= 0
         @$el.append new ThumbnailView(image: item).el
     @$el.append(templates.loadMoreImage())
+    @$el.append(" ")
 
   loadMore: (event) ->
     $(event.target).remove()
@@ -248,12 +249,15 @@ window.ImageView = Backbone.View.extend
         hiddenTags = _.intersection(item.tags, booru.hiddenTagList)
         if hiddenTags.length <= 0
           @$el.append new ThumbnailView(image: item).el
+          @$el.append(" ")
+
 
       if app.config.VIDEO_MODE is true
         @$el.append(templates.loadMoreBar())
         @$el.append(templates.nextInQueueBar())
       else
         @$el.append(templates.loadMoreImage())
+        @$el.append(" ")
         @$el.append(templates.nextInQueueImage())
 
     return @
@@ -477,13 +481,7 @@ window.templates.thumbnail = _.template("
         <% } %>
     </span>
 </div>
-<div class='image_container thumb'>
-    <a href='/<%= image.id_number %>'>
-        <% if (image.isSpoilered()) { print(image.spoileredTags.join(', ')); } else { %>
-        <img src='<%= image.thumb %>' />
-        <% } %>
-    </a>
-</div>
+<div class='image_container thumb'><a href='/<%= image.id_number %>'><% if (image.isSpoilered()) { print(image.spoileredTags.join(', ')); } else { %><img src='<%= image.thumb %>' /><% } %></a></div>
 ")
 
 window.templates.nextInQueueImage = _.template("
@@ -520,7 +518,7 @@ window.templates.loadMoreBar = _.template("
 
 window.templates.similarImagesStars = _.template("
 <div id='similars-title'>
-    <h2>Similar Images</h2>
+    <h6>Similar Images</h6>
     <% _.each(appStars, function(stars, id_number) { %>
         <% _.each(stars, function(star) { %>
             <a href='/<%- id_number %>' title='<%- star %>'>
