@@ -68,6 +68,7 @@ window.Router = Backbone.Router.extend({
     "images/watched/:page": "thumbs",
     "images/page/": null,
     "images/page/:page": "thumbs",
+    "lists/:type": "thumbs",
     "images/:image_id": "similarImages",
     ":image_id": "similarImages",
     "art/*path": "forum",
@@ -98,7 +99,7 @@ window.Router = Backbone.Router.extend({
   thumbs: function() {
     if (window.location.search.indexOf("?highlights") > -1) {
       console.debug("Getting recommendations");
-      return new HighlightsView({
+      new HighlightsView({
         user: app.session.user
       });
     } else {
@@ -109,13 +110,14 @@ window.Router = Backbone.Router.extend({
           type: "big"
         });
       });
-      return _.each($(".image.normalimage .imageinfo.normal"), function(infoElement) {
+      _.each($(".image.normalimage .imageinfo.normal"), function(infoElement) {
         return new ThumbnailInfoView({
           el: infoElement,
           type: "normal"
         });
       });
     }
+    return new MetaBarView();
   },
   similarImages: function(image_id) {
     var target;
@@ -427,6 +429,21 @@ window.ThumbnailInfoView = Backbone.View.extend({
   }
 });
 
+window.MetaBarView = Backbone.View.extend({
+  el: "#imagelist_container > .metabar",
+  events: {
+    "click .queue-all": "queueAll"
+  },
+  initialize: function() {
+    console.debug("Initializing metabar");
+    return this.$el.find(".othermeta").prepend(templates.queueAll());
+  },
+  queueAll: function() {
+    console.debug("Queuing all images");
+    return $(".add-queue:not(.queued)").click();
+  }
+});
+
 window.NotificationView = Backbone.View.extend({
   tagName: "div",
   className: "over-notify",
@@ -626,11 +643,13 @@ window.templates.similarImagesStars = _.template("<div id='similars-title'> <h6>
 
 window.templates.artistTag = _.template("<span class='tag tag-ns-artist'> <a href='<%= url %>'><%- name %></a> </span>");
 
+window.templates.queueAll = _.template("<a class='queue-all' title='Queue all images on page'> <i class='fa fa-cloud-download'></i> <span class='hide-mobile'>Queue All</span> </a>");
+
 videoModeStyles = "<style type='text/css'> .image_show_container { width: 720px; display: inline-block; } #imagelist_container.recommender { display: inline-block; width: 528px; height: 720px; overflow-y: scroll; vertical-align: top; #image_display { max-width: 100%; height: auto; } </style>";
 
 $("head").append("<style type='text/css'> .image-warning, #imagespns { float: left; } .over-notify { border-radius: 5px; padding: 10px; position: fixed; right: 37%; top: 10px; line-height: 100px; width: 120px; height: 120px; font-size: 120px; text-align: center; background-color: rgba(90, 90, 90, 0.3); } .over-notify .fa.off { color: black; } .over-notify .fa-star { color: gold; } .over-notify .fa-arrow-up { color: #67af2b; } .over-notify .fa-arrow-down { color: #cf0001; } .over-notify .fa-arrow-right, .over-notify .fa-cloud-download { color: DeepPink; } .recommender .fave-span { color: #c4b246; } .recommender .fave-span-faved { display: inline!important; color: white!important; background: #c4b246!important; } .recommender .vote-up { color: #67af2b; } .recommender .vote-down { color: #cf0001; } .recommender.load-more-bar.bigimage.image, .recommender.next-in-queue-bar.bigimage.image { width: 506px; } .recommender.next-in-queue-bar.bigimage.image { margin-bottom: 600px; } .recommender.load-more-bar div, .recommender.next-in-queue-bar div { width: 100%; height: 100%; text-align: center; line-height: 50px; } .recommender.load-more a, .recommender.next-in-queue a { cursor: pointer; } .imageinfo.normal.spacer { height: 12px; } .id_number { margin-right: 2px; padding-left: 2px; padding-right: 2px; } .id_number:hover { color: white; background: #57a4db; } .add-queue { margin-left: 2px; padding: 0 2px; } .add-queue a { cursor: pointer; } .add-queue.queued, .add-queue:hover{ background: #57a4db; } .add-queue.queued a, .add-queue a:hover { color: white!important; } #similars-title h2 { display: inline-block; } #similars-title .fa-star { color: gold; cursor: help; } ::selection { background: pink; } </style>");
 
-hatStyles = "<style type='text/css'> .post, .post-meta { overflow: visible!important; } .post-avatar { position: relative; } .hat { position: absolute; top: -100px; left: -26px; } .hat-comment { position: absolute; top: -36px; left: -4px; transform: scale(1.28, 1.28); } </style>";
+hatStyles = "<style type='text/css'> .post, .post-meta { overflow: visible!important; } .post-avatar { position: relative; } .hat { position: absolute; top: -100px; left: -26px; } .hat-comment { position: absolute; top: -36px; left: -4px; transform: scale(1.28, 1.28); } .queue-all { cursor: pointer; } </style>";
 
 window.runDerpibooruExplorer = function(config) {
   if (config.VIDEO_MODE === true) {

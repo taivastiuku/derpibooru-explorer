@@ -2,7 +2,7 @@
 // @name       Derpibooru Explorer
 // @author     taivastiuku@gmail.com
 // @namespace  https://tiuku.me/
-// @version    1.1.6
+// @version    1.1.7
 
 // @description Add recommendations and UX enhancements to derpiboo.ru
 // @match      https://derpiboo.ru/*
@@ -15,7 +15,7 @@
 // @require    https://tiuku.me/static/lodash.underscore.min.js
 // @require    https://tiuku.me/static/backbone-min.js
 // @require    https://tiuku.me/static/keyboard.min.js
-// @require	   https://tiuku.me/static/derpibooru_explorer.js?1.1.6
+// @require	   https://tiuku.me/static/derpibooru_explorer.js?1.1.7
 // @grant      unsafeWindow
 // ==/UserScript==
 
@@ -75,6 +75,9 @@ window.runDerpibooruExplorer(config);
  *
  * Changelog
  * ---------
+ * v1.1.7  - Add thumbnail enhancements to /lists/:splat urls and "Queue All"
+ *           button to /images/ and /lists/ metabar.
+ *
  * v1.1.6  - Add and remove significant whitespaces to work with new styling
  * v1.1.5  - Configuration option to remove stars.
  * v1.1.4  - Add to queue button toggles item in queue instead of adding

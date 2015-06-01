@@ -15,6 +15,8 @@ TOC
 
 Changelog
 ---------
+v1.1.7  - Add thumbnail enhancements to /lists/:splat urls and "Queue All" button to imagelists.
+
 v1.1.6  - Add and remove significant whitespaces to work with new styling
 
 v1.1.5  - Configuration option to remove stars

@@ -62,6 +62,7 @@ window.Router = Backbone.Router.extend
     "images/watched/:page": "thumbs"
     "images/page/": null  # I need pictures, pictures of ponies
     "images/page/:page": "thumbs"
+    "lists/:type": "thumbs"
 
     "images/:image_id": "similarImages"
     ":image_id": "similarImages"
@@ -102,6 +103,8 @@ window.Router = Backbone.Router.extend
 
       _.each $(".image.normalimage .imageinfo.normal"), (infoElement) ->
         new ThumbnailInfoView({el: infoElement, type: "normal"})
+
+    new MetaBarView()
 
   similarImages: (image_id) ->
     return if isNaN parseInt(image_id)
@@ -333,6 +336,20 @@ window.ThumbnailInfoView = Backbone.View.extend
     @render()
 
 
+window.MetaBarView = Backbone.View.extend
+  el: "#imagelist_container > .metabar"
+  events:
+    "click .queue-all": "queueAll"
+
+  initialize: ->
+    console.debug "Initializing metabar"
+    @$el.find(".othermeta").prepend(templates.queueAll())
+
+  queueAll: ->
+    console.debug "Queuing all images"
+    $(".add-queue:not(.queued)").click()
+
+
 window.NotificationView = Backbone.View.extend
   tagName: "div"
   className: "over-notify"
@@ -534,6 +551,13 @@ window.templates.artistTag = _.template("
 </span>
 ")
 
+window.templates.queueAll = _.template("
+<a class='queue-all' title='Queue all images on page'>
+    <i class='fa fa-cloud-download'></i>
+    <span class='hide-mobile'>Queue All</span>
+</a>
+")
+
 # Userscripts do not seem to allow loading other than javascript files.
 # I'll just inject the CSS straight into <head>
 
@@ -680,6 +704,10 @@ hatStyles = "<style type='text/css'>
     top: -36px;
     left: -4px;
     transform: scale(1.28, 1.28);
+}
+
+.queue-all {
+    cursor: pointer;
 }
 </style>"
 #READY.
