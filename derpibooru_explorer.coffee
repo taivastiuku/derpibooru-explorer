@@ -35,7 +35,7 @@ window.Router = Backbone.Router.extend
     @stars = new Stars()
     @imageQueue = new ImageQueue()
 
-    $($(".dropdown_menu")[0]).prepend("<a href='/images/?highlights'><i class='fa fa-fw fa-birthday-cake'></i> Highlights</a>")
+    $($(".dropdown_menu")[0]).append("<a href='/images/?highlights'><i class='fa fa-fw fa-birthday-cake'></i> Highlights</a> <a href='/images/?queue'><i class='fa fa-cloud-download'></i> Queue</a>'")
 
     KeyboardJS.on "e", =>
       console.debug "Next in queue"
@@ -93,9 +93,13 @@ window.Router = Backbone.Router.extend
     @thumbs()
 
   thumbs:  ->
+    new MetaBarView()
     if window.location.search.indexOf("?highlights") > -1
       console.debug "Getting recommendations"
       new HighlightsView(user: app.session.user)
+    else if window.location.search.indexOf("?queue") > -1
+      console.debug "Showing queue"
+      new QueueView()
     else
       console.debug "Add queue-button to thumbnails"
       _.each $(".image.bigimage .imageinfo.normal"), (infoElement) ->
@@ -103,8 +107,6 @@ window.Router = Backbone.Router.extend
 
       _.each $(".image.normalimage .imageinfo.normal"), (infoElement) ->
         new ThumbnailInfoView({el: infoElement, type: "normal"})
-
-    new MetaBarView()
 
   similarImages: (image_id) ->
     return if isNaN parseInt(image_id)
@@ -138,10 +140,36 @@ window.Router = Backbone.Router.extend
         $(".post-avatar").append("<img class='hat' src='https://tiuku.me/static/pic/jul.gif'>")
 
 
+window.QueueView = Backbone.View.extend
+  el: "#imagelist_container"
+  initialize: (options) ->
+    @$el.html("")
+    @$el.addClass("queue-list")
+    @render()
+
+  events: ->
+    "click .queue-all": "removeAll"
+
+  render: ->
+    queue = app.imageQueue.list()
+    @$el.append(templates.queueMetabar(count: queue.length))
+    if queue.length > 0
+      _.each queue, (item) =>
+        image = app.imageQueue.loadImage(item)
+        console.log image
+        @$el.append new ThumbnailView(image: image).el
+    else
+      @$el.append("<h2>Empty queue</h2>")
+
+  removeAll: ->
+    console.debug "Removing all images from queue"
+    $(".add-queue.queued").click()
+
 window.HighlightsView = Backbone.View.extend
   el: "#imagelist_container"
   initialize: (options) ->
     @$el.html("")
+    @$el.addClass "highlights"
     @offset = 0
     @highlights = []
     @user = options.user
@@ -165,7 +193,6 @@ window.HighlightsView = Backbone.View.extend
       if hiddenTags.length <= 0
         @$el.append new ThumbnailView(image: item).el
     @$el.append(templates.loadMoreImage())
-    @$el.append(" ")
 
   loadMore: (event) ->
     $(event.target).remove()
@@ -289,9 +316,10 @@ window.ThumbnailView = Backbone.View.extend
     @$el.html templates.thumbnail
       image: @image
       short_image: @short_image
+    @$el.append(" ")
 
   queue: ->
-    app.imageQueue.toggle(@image.id_number)
+    app.imageQueue.toggle(@image.id_number, @image)
     @render()
 
 
@@ -299,40 +327,45 @@ window.ThumbnailInfoView = Backbone.View.extend
   initialize: (options) ->
     @el = options.el
     @type = options.type
-    try
-      @link = @$el.parent()
-        .attr("data-download-uri")
-        .replace(/[/]download[/]/, "/view/")
-        .replace(/__[a-z0-9+_-]+\./, ".")
-    catch error
-      @link = ""
-    @imageId = parseInt(@$el.find(".comments_link").attr("href").split("#")[0].slice(1))
+    parent = @$el.parent()
+    @link = parent
+      .attr("data-download-uri")
+      .replace(/[/]download[/]/, "/view/")
+      .replace(/__[a-z0-9+_-]+\./, ".")
+    @image =
+      id_number: parseInt(@$el.find(".comments_link").attr("href").split("#")[0].slice(1))
+      tags: parent.attr("data-image-tag-aliases")
+      score: parent.attr("data-upvotes")
+      favourites: parent.attr("data-faves")
+      thumb: JSON.parse(parent.attr("data-uris")).thumb
+      image: @link
+
     @render()
 
   events:
     "click .add-queue": "queue"
 
   render: ->
-    @remove() if isNaN(@imageId)
+    @remove() if _.isEmpty(@image)
     @$el.find(".add-queue").remove()
     @$el.find(".id_number").remove()
 
     if @type == "big"
-      @$el.prepend("<a href='#{@link}' class='id_number' title='#{@imageId}'><i class='fa fa-image'></i> #{@imageId}</a>")
-      if app.imageQueue.contains(@imageId)
+      @$el.prepend("<a href='#{@link}' class='id_number' title='#{@image.id_number}'><i class='fa fa-image'></i> #{@image.id_number}</a>")
+      if app.imageQueue.contains(@image.id_number)
         @$el.append("<span class='add-queue queued'%><a><i class='fa fa-plus-square'></i> in queue</a></span>")
       else
         @$el.append("<span class='add-queue'><a><i class='fa fa-plus-square'></i> Queue</a></span>")
 
     else if @type == "normal"
-      @$el.prepend("<a href='#{@link}' class='id_number' title='#{@imageId}'><i class='fa fa-image'></i></a>")
-      if app.imageQueue.contains(@imageId)
+      @$el.prepend("<a href='#{@link}' class='id_number' title='#{@image.id_number}'><i class='fa fa-image'></i></a>")
+      if app.imageQueue.contains(@image.id_number)
         @$el.append("<span class='add-queue queued'%><a><i class='fa fa-plus-square'></i></a></span>")
       else
         @$el.append("<span class='add-queue'><a><i class='fa fa-plus-square'></i></a></span>")
 
   queue: ->
-    app.imageQueue.toggle(@imageId)
+    app.imageQueue.toggle(@image.id_number, @image)
     @render()
 
 
@@ -372,8 +405,9 @@ class ImageQueue
   load: ->
     @queue = JSON.parse(localStorage.getItem("derpQueue")) or []
     @history = JSON.parse(localStorage.getItem("derpHistory")) or []
+    @imageCache = JSON.parse(localStorage.getItem("derpCache")) or {}
 
-  add: (id) ->
+  add: (id, image) ->
     id = parseInt(id)
     return if isNaN(id)
     console.debug("Adding ##{id} to queue")
@@ -381,6 +415,7 @@ class ImageQueue
              # have the most current queue.
     new NotificationView(fa: "fa-cloud-download")
     @queue.push(id)
+    @imageCache[id] = image if image
     @save()
 
   remove: (id) ->
@@ -390,9 +425,10 @@ class ImageQueue
     @load()
     new NotificationView(fa: "fa-cloud-download", off: true)
     @queue = _.filter @queue, (queue_id) -> queue_id != id
+    delete @imageCache[id]
     @save()
 
-  toggle: (id) ->
+  toggle: (id, image) ->
     id = parseInt(id)
     return if isNaN(id)
     console.debug("Toggling ##{id}")
@@ -400,7 +436,7 @@ class ImageQueue
     if _.contains(@queue, id)
       @remove(id)
     else
-      @add(id)
+      @add(id, image)
 
   next: ->
     new NotificationView(fa: "fa-arrow-right")
@@ -413,6 +449,7 @@ class ImageQueue
 
     console.debug("Moving to next: ##{nextId}")
     @history.unshift(nextId)
+    delete @imageCache[nextId]
     @save()
     document.location = "/#{nextId}"
 
@@ -420,8 +457,25 @@ class ImageQueue
     console.debug("Saving queue")
     localStorage.setItem("derpQueue", JSON.stringify(@queue))
     localStorage.setItem("derpHistory", JSON.stringify(@history))
+    localStorage.setItem("derpCache", JSON.stringify(@imageCache))
 
   contains: (id) -> _.contains(@queue, id)
+
+  list: -> _.clone(@queue)
+
+  loadImage: (id) ->
+    if @imageCache[id]
+      return @imageCache[id]
+    else
+      return {
+        tags: []
+        id_number: id
+        short_image: ""
+        score: NaN
+        favourites: NaN
+        thumb: ""
+        image: ""}
+
 
 class Stars
   constructor: ->
@@ -558,6 +612,18 @@ window.templates.queueAll = _.template("
 </a>
 ")
 
+window.templates.queueMetabar = _.template("
+<div class='metabar meta-table'>
+    <div class='metasection'><strong>Queue of <%- count %> images</strong></div>
+    <div class='othermeta'>
+        <a class='queue-all' title='Remove all images from queue'>
+            <i class='fa fa-cloud-download'></i>
+            <span class='hide-mobile'>Remove All</span>
+        </a>
+    </div>
+</div>
+")
+
 # Userscripts do not seem to allow loading other than javascript files.
 # I'll just inject the CSS straight into <head>
 
@@ -677,6 +743,10 @@ $("head").append("
     color: gold;
     cursor: help;
 }
+.highlights .image.recommender, .queue-list .image.recommender {
+    margin-left: 5px;
+}
+
 ::selection {
     background: pink;
 }

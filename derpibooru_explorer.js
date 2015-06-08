@@ -38,7 +38,7 @@ window.Router = Backbone.Router.extend({
     this.session = new Session(config.LOGOUT_ENDS_SESSION);
     this.stars = new Stars();
     this.imageQueue = new ImageQueue();
-    $($(".dropdown_menu")[0]).prepend("<a href='/images/?highlights'><i class='fa fa-fw fa-birthday-cake'></i> Highlights</a>");
+    $($(".dropdown_menu")[0]).append("<a href='/images/?highlights'><i class='fa fa-fw fa-birthday-cake'></i> Highlights</a> <a href='/images/?queue'><i class='fa fa-cloud-download'></i> Queue</a>'");
     KeyboardJS.on("e", (function(_this) {
       return function() {
         console.debug("Next in queue");
@@ -97,11 +97,15 @@ window.Router = Backbone.Router.extend({
     return this.thumbs();
   },
   thumbs: function() {
+    new MetaBarView();
     if (window.location.search.indexOf("?highlights") > -1) {
       console.debug("Getting recommendations");
-      new HighlightsView({
+      return new HighlightsView({
         user: app.session.user
       });
+    } else if (window.location.search.indexOf("?queue") > -1) {
+      console.debug("Showing queue");
+      return new QueueView();
     } else {
       console.debug("Add queue-button to thumbnails");
       _.each($(".image.bigimage .imageinfo.normal"), function(infoElement) {
@@ -110,14 +114,13 @@ window.Router = Backbone.Router.extend({
           type: "big"
         });
       });
-      _.each($(".image.normalimage .imageinfo.normal"), function(infoElement) {
+      return _.each($(".image.normalimage .imageinfo.normal"), function(infoElement) {
         return new ThumbnailInfoView({
           el: infoElement,
           type: "normal"
         });
       });
     }
-    return new MetaBarView();
   },
   similarImages: function(image_id) {
     var target;
@@ -162,10 +165,50 @@ window.Router = Backbone.Router.extend({
   }
 });
 
+window.QueueView = Backbone.View.extend({
+  el: "#imagelist_container",
+  initialize: function(options) {
+    this.$el.html("");
+    this.$el.addClass("queue-list");
+    return this.render();
+  },
+  events: function() {
+    return {
+      "click .queue-all": "removeAll"
+    };
+  },
+  render: function() {
+    var queue;
+    queue = app.imageQueue.list();
+    this.$el.append(templates.queueMetabar({
+      count: queue.length
+    }));
+    if (queue.length > 0) {
+      return _.each(queue, (function(_this) {
+        return function(item) {
+          var image;
+          image = app.imageQueue.loadImage(item);
+          console.log(image);
+          return _this.$el.append(new ThumbnailView({
+            image: image
+          }).el);
+        };
+      })(this));
+    } else {
+      return this.$el.append("<h2>Empty queue</h2>");
+    }
+  },
+  removeAll: function() {
+    console.debug("Removing all images from queue");
+    return $(".add-queue.queued").click();
+  }
+});
+
 window.HighlightsView = Backbone.View.extend({
   el: "#imagelist_container",
   initialize: function(options) {
     this.$el.html("");
+    this.$el.addClass("highlights");
     this.offset = 0;
     this.highlights = [];
     this.user = options.user;
@@ -200,8 +243,7 @@ window.HighlightsView = Backbone.View.extend({
         }
       };
     })(this));
-    this.$el.append(templates.loadMoreImage());
-    return this.$el.append(" ");
+    return this.$el.append(templates.loadMoreImage());
   },
   loadMore: function(event) {
     $(event.target).remove();
@@ -373,50 +415,54 @@ window.ThumbnailView = Backbone.View.extend({
     return this.render();
   },
   render: function() {
-    return this.$el.html(templates.thumbnail({
+    this.$el.html(templates.thumbnail({
       image: this.image,
       short_image: this.short_image
     }));
+    return this.$el.append(" ");
   },
   queue: function() {
-    app.imageQueue.toggle(this.image.id_number);
+    app.imageQueue.toggle(this.image.id_number, this.image);
     return this.render();
   }
 });
 
 window.ThumbnailInfoView = Backbone.View.extend({
   initialize: function(options) {
-    var error;
+    var parent;
     this.el = options.el;
     this.type = options.type;
-    try {
-      this.link = this.$el.parent().attr("data-download-uri").replace(/[\/]download[\/]/, "/view/").replace(/__[a-z0-9+_-]+\./, ".");
-    } catch (_error) {
-      error = _error;
-      this.link = "";
-    }
-    this.imageId = parseInt(this.$el.find(".comments_link").attr("href").split("#")[0].slice(1));
+    parent = this.$el.parent();
+    this.link = parent.attr("data-download-uri").replace(/[\/]download[\/]/, "/view/").replace(/__[a-z0-9+_-]+\./, ".");
+    this.image = {
+      id_number: parseInt(this.$el.find(".comments_link").attr("href").split("#")[0].slice(1)),
+      tags: parent.attr("data-image-tag-aliases"),
+      score: parent.attr("data-upvotes"),
+      favourites: parent.attr("data-faves"),
+      thumb: JSON.parse(parent.attr("data-uris")).thumb,
+      image: this.link
+    };
     return this.render();
   },
   events: {
     "click .add-queue": "queue"
   },
   render: function() {
-    if (isNaN(this.imageId)) {
+    if (_.isEmpty(this.image)) {
       this.remove();
     }
     this.$el.find(".add-queue").remove();
     this.$el.find(".id_number").remove();
     if (this.type === "big") {
-      this.$el.prepend("<a href='" + this.link + "' class='id_number' title='" + this.imageId + "'><i class='fa fa-image'></i> " + this.imageId + "</a>");
-      if (app.imageQueue.contains(this.imageId)) {
+      this.$el.prepend("<a href='" + this.link + "' class='id_number' title='" + this.image.id_number + "'><i class='fa fa-image'></i> " + this.image.id_number + "</a>");
+      if (app.imageQueue.contains(this.image.id_number)) {
         return this.$el.append("<span class='add-queue queued'%><a><i class='fa fa-plus-square'></i> in queue</a></span>");
       } else {
         return this.$el.append("<span class='add-queue'><a><i class='fa fa-plus-square'></i> Queue</a></span>");
       }
     } else if (this.type === "normal") {
-      this.$el.prepend("<a href='" + this.link + "' class='id_number' title='" + this.imageId + "'><i class='fa fa-image'></i></a>");
-      if (app.imageQueue.contains(this.imageId)) {
+      this.$el.prepend("<a href='" + this.link + "' class='id_number' title='" + this.image.id_number + "'><i class='fa fa-image'></i></a>");
+      if (app.imageQueue.contains(this.image.id_number)) {
         return this.$el.append("<span class='add-queue queued'%><a><i class='fa fa-plus-square'></i></a></span>");
       } else {
         return this.$el.append("<span class='add-queue'><a><i class='fa fa-plus-square'></i></a></span>");
@@ -424,7 +470,7 @@ window.ThumbnailInfoView = Backbone.View.extend({
     }
   },
   queue: function() {
-    app.imageQueue.toggle(this.imageId);
+    app.imageQueue.toggle(this.image.id_number, this.image);
     return this.render();
   }
 });
@@ -472,10 +518,11 @@ ImageQueue = (function() {
 
   ImageQueue.prototype.load = function() {
     this.queue = JSON.parse(localStorage.getItem("derpQueue")) || [];
-    return this.history = JSON.parse(localStorage.getItem("derpHistory")) || [];
+    this.history = JSON.parse(localStorage.getItem("derpHistory")) || [];
+    return this.imageCache = JSON.parse(localStorage.getItem("derpCache")) || {};
   };
 
-  ImageQueue.prototype.add = function(id) {
+  ImageQueue.prototype.add = function(id, image) {
     id = parseInt(id);
     if (isNaN(id)) {
       return;
@@ -486,6 +533,9 @@ ImageQueue = (function() {
       fa: "fa-cloud-download"
     });
     this.queue.push(id);
+    if (image) {
+      this.imageCache[id] = image;
+    }
     return this.save();
   };
 
@@ -503,10 +553,11 @@ ImageQueue = (function() {
     this.queue = _.filter(this.queue, function(queue_id) {
       return queue_id !== id;
     });
+    delete this.imageCache[id];
     return this.save();
   };
 
-  ImageQueue.prototype.toggle = function(id) {
+  ImageQueue.prototype.toggle = function(id, image) {
     id = parseInt(id);
     if (isNaN(id)) {
       return;
@@ -516,7 +567,7 @@ ImageQueue = (function() {
     if (_.contains(this.queue, id)) {
       return this.remove(id);
     } else {
-      return this.add(id);
+      return this.add(id, image);
     }
   };
 
@@ -533,6 +584,7 @@ ImageQueue = (function() {
     this.actionCalled = true;
     console.debug("Moving to next: #" + nextId);
     this.history.unshift(nextId);
+    delete this.imageCache[nextId];
     this.save();
     return document.location = "/" + nextId;
   };
@@ -540,11 +592,32 @@ ImageQueue = (function() {
   ImageQueue.prototype.save = function() {
     console.debug("Saving queue");
     localStorage.setItem("derpQueue", JSON.stringify(this.queue));
-    return localStorage.setItem("derpHistory", JSON.stringify(this.history));
+    localStorage.setItem("derpHistory", JSON.stringify(this.history));
+    return localStorage.setItem("derpCache", JSON.stringify(this.imageCache));
   };
 
   ImageQueue.prototype.contains = function(id) {
     return _.contains(this.queue, id);
+  };
+
+  ImageQueue.prototype.list = function() {
+    return _.clone(this.queue);
+  };
+
+  ImageQueue.prototype.loadImage = function(id) {
+    if (this.imageCache[id]) {
+      return this.imageCache[id];
+    } else {
+      return {
+        tags: [],
+        id_number: id,
+        short_image: "",
+        score: NaN,
+        favourites: NaN,
+        thumb: "",
+        image: ""
+      };
+    }
   };
 
   return ImageQueue;
@@ -645,9 +718,11 @@ window.templates.artistTag = _.template("<span class='tag tag-ns-artist'> <a hre
 
 window.templates.queueAll = _.template("<a class='queue-all' title='Queue all images on page'> <i class='fa fa-cloud-download'></i> <span class='hide-mobile'>Queue All</span> </a>");
 
+window.templates.queueMetabar = _.template("<div class='metabar meta-table'> <div class='metasection'><strong>Queue of <%- count %> images</strong></div> <div class='othermeta'> <a class='queue-all' title='Remove all images from queue'> <i class='fa fa-cloud-download'></i> <span class='hide-mobile'>Remove All</span> </a> </div> </div>");
+
 videoModeStyles = "<style type='text/css'> .image_show_container { width: 720px; display: inline-block; } #imagelist_container.recommender { display: inline-block; width: 528px; height: 720px; overflow-y: scroll; vertical-align: top; #image_display { max-width: 100%; height: auto; } </style>";
 
-$("head").append("<style type='text/css'> .image-warning, #imagespns { float: left; } .over-notify { border-radius: 5px; padding: 10px; position: fixed; right: 37%; top: 10px; line-height: 100px; width: 120px; height: 120px; font-size: 120px; text-align: center; background-color: rgba(90, 90, 90, 0.3); } .over-notify .fa.off { color: black; } .over-notify .fa-star { color: gold; } .over-notify .fa-arrow-up { color: #67af2b; } .over-notify .fa-arrow-down { color: #cf0001; } .over-notify .fa-arrow-right, .over-notify .fa-cloud-download { color: DeepPink; } .recommender .fave-span { color: #c4b246; } .recommender .fave-span-faved { display: inline!important; color: white!important; background: #c4b246!important; } .recommender .vote-up { color: #67af2b; } .recommender .vote-down { color: #cf0001; } .recommender.load-more-bar.bigimage.image, .recommender.next-in-queue-bar.bigimage.image { width: 506px; } .recommender.next-in-queue-bar.bigimage.image { margin-bottom: 600px; } .recommender.load-more-bar div, .recommender.next-in-queue-bar div { width: 100%; height: 100%; text-align: center; line-height: 50px; } .recommender.load-more a, .recommender.next-in-queue a { cursor: pointer; } .imageinfo.normal.spacer { height: 12px; } .id_number { margin-right: 2px; padding-left: 2px; padding-right: 2px; } .id_number:hover { color: white; background: #57a4db; } .add-queue { margin-left: 2px; padding: 0 2px; } .add-queue a { cursor: pointer; } .add-queue.queued, .add-queue:hover{ background: #57a4db; } .add-queue.queued a, .add-queue a:hover { color: white!important; } #similars-title h2 { display: inline-block; } #similars-title .fa-star { color: gold; cursor: help; } ::selection { background: pink; } </style>");
+$("head").append("<style type='text/css'> .image-warning, #imagespns { float: left; } .over-notify { border-radius: 5px; padding: 10px; position: fixed; right: 37%; top: 10px; line-height: 100px; width: 120px; height: 120px; font-size: 120px; text-align: center; background-color: rgba(90, 90, 90, 0.3); } .over-notify .fa.off { color: black; } .over-notify .fa-star { color: gold; } .over-notify .fa-arrow-up { color: #67af2b; } .over-notify .fa-arrow-down { color: #cf0001; } .over-notify .fa-arrow-right, .over-notify .fa-cloud-download { color: DeepPink; } .recommender .fave-span { color: #c4b246; } .recommender .fave-span-faved { display: inline!important; color: white!important; background: #c4b246!important; } .recommender .vote-up { color: #67af2b; } .recommender .vote-down { color: #cf0001; } .recommender.load-more-bar.bigimage.image, .recommender.next-in-queue-bar.bigimage.image { width: 506px; } .recommender.next-in-queue-bar.bigimage.image { margin-bottom: 600px; } .recommender.load-more-bar div, .recommender.next-in-queue-bar div { width: 100%; height: 100%; text-align: center; line-height: 50px; } .recommender.load-more a, .recommender.next-in-queue a { cursor: pointer; } .imageinfo.normal.spacer { height: 12px; } .id_number { margin-right: 2px; padding-left: 2px; padding-right: 2px; } .id_number:hover { color: white; background: #57a4db; } .add-queue { margin-left: 2px; padding: 0 2px; } .add-queue a { cursor: pointer; } .add-queue.queued, .add-queue:hover{ background: #57a4db; } .add-queue.queued a, .add-queue a:hover { color: white!important; } #similars-title h2 { display: inline-block; } #similars-title .fa-star { color: gold; cursor: help; } .highlights .image.recommender, .queue-list .image.recommender { margin-left: 5px; } ::selection { background: pink; } </style>");
 
 hatStyles = "<style type='text/css'> .post, .post-meta { overflow: visible!important; } .post-avatar { position: relative; } .hat { position: absolute; top: -100px; left: -26px; } .hat-comment { position: absolute; top: -36px; left: -4px; transform: scale(1.28, 1.28); } .queue-all { cursor: pointer; } </style>";
 
