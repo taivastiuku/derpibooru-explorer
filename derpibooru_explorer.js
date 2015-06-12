@@ -20,7 +20,7 @@
  * https://tiuku.me/static/derpibooru_explorer.coffee
  */
 "use strict";
-var ImageQueue, Session, Stars, app, booru, hatStyles, inputSelected, videoModeStyles;
+var ImageQueue, Session, app, booru, hatStyles, inputSelected, videoModeStyles;
 
 app = null;
 
@@ -36,9 +36,8 @@ window.Router = Backbone.Router.extend({
     console.debug("Initializing router");
     this.config = config;
     this.session = new Session(config.LOGOUT_ENDS_SESSION);
-    this.stars = new Stars();
     this.imageQueue = new ImageQueue();
-    $($(".dropdown_menu")[0]).append("<a href='/images/?highlights'><i class='fa fa-fw fa-birthday-cake'></i> Highlights</a> <a href='/images/?queue'><i class='fa fa-cloud-download'></i> Queue</a>'");
+    $($(".dropdown_menu")[0]).append("<a href='/images/?highlights'><i class='fa fa-fw fa-birthday-cake'></i> Highlights</a> <a href='/images/?queue'><i class='fa fa-cloud-download'></i> Queue</a>");
     KeyboardJS.on("e", (function(_this) {
       return function() {
         console.debug("Next in queue");
@@ -259,7 +258,6 @@ window.ImageView = Backbone.View.extend({
   initialize: function(options) {
     this.offset = 0;
     this.recommendations = [];
-    this.stars = new Stars();
     this.image = {
       id_number: options.imageId,
       is_faved: function() {
@@ -333,11 +331,41 @@ window.ImageView = Backbone.View.extend({
   load: function() {
     return $.get("https://tiuku.me/api/for-image/" + this.image.id_number + "?session=" + app.session.id + "&offset=" + this.offset, (function(_this) {
       return function(data) {
-        _this.recommendations = _this.recommendations.concat(data.recommendations);
-        if (data.stars) {
-          _this.stars.add(_this.image.id_number, data.stars);
-        }
-        return _this.render();
+        var ids;
+        ids = _.map(_.filter(data.recommendations, function(item) {
+          return item.id !== null;
+        }), function(item) {
+          return item.id;
+        });
+        return $.get("https://derpiboo.ru/api/v2/interactions/interacted.json?class=Image&ids=" + (ids.join()), function(raw_interactions) {
+          var interactions;
+          interactions = {};
+          _.each(raw_interactions, function(i) {
+            var obj;
+            obj = interactions[i.interactable_id] || {};
+            if (i.interaction_type === "faved") {
+              obj.faved = true;
+            } else if (i.interaction_type === "voted") {
+              obj.voted = i.value;
+            }
+            return interactions[i.interactable_id] = obj;
+          });
+          _.each(data.recommendations, function(r) {
+            var interaction;
+            interaction = interactions[r.id];
+            console.log(interaction);
+            if (interaction) {
+              _.extend(r, interaction);
+            }
+            return console.log(r);
+          });
+          _this.recommendations = _this.recommendations.concat(data.recommendations);
+          console.log(_this.recommendations);
+          return _this.render();
+        }).fail(function() {
+          this.recommendations = this.recommendations.concat(data.recommendations);
+          return this.render();
+        });
       };
     })(this)).fail(function() {
       console.debug("Server error");
@@ -346,15 +374,11 @@ window.ImageView = Backbone.View.extend({
   },
   renderFailure: function() {
     console.debug("Rendering failure message");
-    this.$el.html(templates.similarImagesStars({
-      appStars: this.stars.get()
-    })).append("<div>Data load error</div>");
+    this.$el.html(templates.similarImagesTitle()).append("<div>Data load error</div>");
     return this;
   },
   render: function() {
-    this.$el.html(templates.similarImagesStars({
-      appStars: this.stars.get()
-    }));
+    this.$el.html(templates.similarImagesTitle());
     if (this.recommendations.length <= 0) {
       console.debug("No thumbnails to render");
       this.$el.append("<div>No recommendations</div>");
@@ -397,11 +421,6 @@ window.ThumbnailView = Backbone.View.extend({
     spoileredTags = _.intersection(this.image.tags, booru.spoileredTagList);
     _.extend(this.image, {
       spoileredTags: spoileredTags,
-      isFaved: (function(_this) {
-        return function() {
-          return _.contains(_this.image.tags, "faved_by:" + app.session.user);
-        };
-      })(this),
       isSpoilered: function() {
         return spoileredTags.length > 0;
       },
@@ -435,6 +454,7 @@ window.ThumbnailInfoView = Backbone.View.extend({
     parent = this.$el.parent();
     this.link = parent.attr("data-download-uri").replace(/[\/]download[\/]/, "/view/").replace(/__[a-z0-9+_-]+\./, ".");
     this.image = {
+      id: parent.attr("data-image-id"),
       id_number: parseInt(this.$el.find(".comments_link").attr("href").split("#")[0].slice(1)),
       tags: parent.attr("data-image-tag-aliases"),
       score: parent.attr("data-upvotes"),
@@ -624,39 +644,6 @@ ImageQueue = (function() {
 
 })();
 
-Stars = (function() {
-  function Stars() {
-    this._stars = JSON.parse(localStorage.getItem("derpStars")) || {};
-  }
-
-  Stars.prototype.get = function() {
-    return this._stars;
-  };
-
-  Stars.prototype.add = function(imageId, stars) {
-    var imageStars;
-    if (imageId === void 0 || _.isEmpty(stars)) {
-      return;
-    }
-    imageStars = this._stars[imageId];
-    if (imageStars === void 0) {
-      this._stars[imageId] = stars;
-    } else {
-      _.each(stars, (function(_this) {
-        return function(star) {
-          if (!_.contains(imageStars, star)) {
-            return imageStars.push(star);
-          }
-        };
-      })(this));
-    }
-    return localStorage.setItem("derpStars", JSON.stringify(this._stars));
-  };
-
-  return Stars;
-
-})();
-
 Session = (function() {
   function Session(logoutEndsSession) {
     var oldID, oldUser;
@@ -681,7 +668,6 @@ Session = (function() {
     this.id = this._makeId();
     localStorage.setItem("derpSession", this.id);
     localStorage.setItem("derpUser", this.user);
-    localStorage.setItem("derpStars", null);
     localStorage.setItem("derpQueue", null);
     return localStorage.setItem("derpHistory", null);
   };
@@ -702,7 +688,7 @@ Session = (function() {
 
 window.templates = {};
 
-window.templates.thumbnail = _.template("<div class='imageinfo normal'> <span> <a href='<%= short_image %>' class='id_number' title='<%- image.id_number %>'><i class='fa fa-image'></i> <%- image.id_number %></a> <span class='fave-span<% if (image.isFaved()) {print('-faved');} %>'> <i class='fa fa-star'></i> <span class='favourites'><%- image.favourites %></span> </span> <i class='fa fa-arrow-up vote-up'></i> <span class='score'><%- image.score %></span> <a href='/<%= image.id_number %>#comments' class='comments_link'><i class='fa fa-comments'></i></a> <% if (image.isQueued()) { %> <span class='add-queue queued'%><a><i class='fa fa-plus-square'></i> in queue</a></span> <% } else { %> <span class='add-queue'><a><i class='fa fa-plus-square'></i> queue</a></span> <% } %> </span> </div> <div class='image_container thumb'><a href='/<%= image.id_number %>'><% if (image.isSpoilered()) { print(image.spoileredTags.join(', ')); } else { %><img src='<%= image.thumb %>' /><% } %></a></div>");
+window.templates.thumbnail = _.template("<div class='imageinfo normal'> <span> <a href='<%= short_image %>' class='id_number' title='<%- image.id_number %>'><i class='fa fa-image'></i> <%- image.id_number %></a> <span class='fave-span<% if (image.faved == true) {print('-faved');} %>'><i class='fa fa-star'></i> <span class='favourites'><%- image.favourites %></span></span> <span class='vote-up-span<% if (image.voted == 'up') {print('-up-voted');} %>'><i class='fa fa-arrow-up vote-up'></i></span> <span class='score'><%- image.score %></span> <a href='/<%= image.id_number %>#comments' class='comments_link'><i class='fa fa-comments'></i></a> <% if (image.isQueued()) { %> <span class='add-queue queued'%><a><i class='fa fa-plus-square'></i> in queue</a></span> <% } else { %> <span class='add-queue'><a><i class='fa fa-plus-square'></i> queue</a></span> <% } %> </span> </div> <div class='image_container thumb'><a href='/<%= image.id_number %>'><% if (image.isSpoilered()) { print(image.spoileredTags.join(', ')); } else { %><img src='<%= image.thumb %>' /><% } %></a></div>");
 
 window.templates.nextInQueueImage = _.template("<div class='image bigimage recommender next-in-queue'> <div class='imageinfo normal spacer'></div> <div class='image_container thumb'> <a>Next in queue <i class='fa fa-arrow-right'></i></a> </div> </div>");
 
@@ -712,7 +698,7 @@ window.templates.nextInQueueBar = _.template("<div class='image bigimage recomme
 
 window.templates.loadMoreBar = _.template("<div class='image bigimage recommender load-more load-more-bar'> <div> <a>Load more</a> </div> </div>");
 
-window.templates.similarImagesStars = _.template("<div id='similars-title'> <h6>Similar Images</h6> <% _.each(appStars, function(stars, id_number) { %> <% _.each(stars, function(star) { %> <a href='/<%- id_number %>' title='<%- star %>'> <i class='fa fa-star'></i> </a> <% }); }); %> </div>");
+window.templates.similarImagesTitle = _.template("<div id='similars-title'> <h6>Similar Images</h6> </div>");
 
 window.templates.artistTag = _.template("<span class='tag tag-ns-artist'> <a href='<%= url %>'><%- name %></a> </span>");
 
@@ -722,7 +708,7 @@ window.templates.queueMetabar = _.template("<div class='metabar meta-table'> <di
 
 videoModeStyles = "<style type='text/css'> .image_show_container { width: 720px; display: inline-block; } #imagelist_container.recommender { display: inline-block; width: 528px; height: 720px; overflow-y: scroll; vertical-align: top; #image_display { max-width: 100%; height: auto; } </style>";
 
-$("head").append("<style type='text/css'> .image-warning, #imagespns { float: left; } .over-notify { border-radius: 5px; padding: 10px; position: fixed; right: 37%; top: 10px; line-height: 100px; width: 120px; height: 120px; font-size: 120px; text-align: center; background-color: rgba(90, 90, 90, 0.3); } .over-notify .fa.off { color: black; } .over-notify .fa-star { color: gold; } .over-notify .fa-arrow-up { color: #67af2b; } .over-notify .fa-arrow-down { color: #cf0001; } .over-notify .fa-arrow-right, .over-notify .fa-cloud-download { color: DeepPink; } .recommender .fave-span { color: #c4b246; } .recommender .fave-span-faved { display: inline!important; color: white!important; background: #c4b246!important; } .recommender .vote-up { color: #67af2b; } .recommender .vote-down { color: #cf0001; } .recommender.load-more-bar.bigimage.image, .recommender.next-in-queue-bar.bigimage.image { width: 506px; } .recommender.next-in-queue-bar.bigimage.image { margin-bottom: 600px; } .recommender.load-more-bar div, .recommender.next-in-queue-bar div { width: 100%; height: 100%; text-align: center; line-height: 50px; } .recommender.load-more a, .recommender.next-in-queue a { cursor: pointer; } .imageinfo.normal.spacer { height: 12px; } .id_number { margin-right: 2px; padding-left: 2px; padding-right: 2px; } .id_number:hover { color: white; background: #57a4db; } .add-queue { margin-left: 2px; padding: 0 2px; } .add-queue a { cursor: pointer; } .add-queue.queued, .add-queue:hover{ background: #57a4db; } .add-queue.queued a, .add-queue a:hover { color: white!important; } #similars-title h2 { display: inline-block; } #similars-title .fa-star { color: gold; cursor: help; } .highlights .image.recommender, .queue-list .image.recommender { margin-left: 5px; } ::selection { background: pink; } </style>");
+$("head").append("<style type='text/css'> .image-warning, #imagespns { float: left; } .over-notify { border-radius: 5px; padding: 10px; position: fixed; right: 37%; top: 10px; line-height: 100px; width: 120px; height: 120px; font-size: 120px; text-align: center; background-color: rgba(90, 90, 90, 0.3); } .over-notify .fa.off { color: black; } .over-notify .fa-star { color: gold; } .over-notify .fa-arrow-up { color: #67af2b; } .over-notify .fa-arrow-down { color: #cf0001; } .over-notify .fa-arrow-right, .over-notify .fa-cloud-download { color: DeepPink; } .recommender .fave-span { color: #c4b246; } .recommender .fave-span-faved { display: inline!important; color: white!important; background: #c4b246!important; } .recommender .vote-up-span { color: #67af2b; } .recommender .vote-up-span-up-voted { display: inline!important; color: white!important; background: #67af2b!important; } .recommender .vote-down { color: #cf0001; } .recommender.load-more-bar.bigimage.image, .recommender.next-in-queue-bar.bigimage.image { width: 506px; } .recommender.next-in-queue-bar.bigimage.image { margin-bottom: 600px; } .recommender.load-more-bar div, .recommender.next-in-queue-bar div { width: 100%; height: 100%; text-align: center; line-height: 50px; } .recommender.load-more a, .recommender.next-in-queue a { cursor: pointer; } .imageinfo.normal.spacer { height: 12px; } .id_number { margin-right: 2px; padding-left: 2px; padding-right: 2px; } .id_number:hover { color: white; background: #57a4db; } .add-queue { margin-left: 2px; padding: 0 2px; } .add-queue a { cursor: pointer; } .add-queue.queued, .add-queue:hover{ background: #57a4db; } .add-queue.queued a, .add-queue a:hover { color: white!important; } #similars-title h2 { display: inline-block; } #similars-title .fa-star { color: gold; cursor: help; } .highlights .image.recommender, .queue-list .image.recommender { margin-left: 5px; } ::selection { background: pink; } </style>");
 
 hatStyles = "<style type='text/css'> .post, .post-meta { overflow: visible!important; } .post-avatar { position: relative; } .hat { position: absolute; top: -100px; left: -26px; } .hat-comment { position: absolute; top: -36px; left: -4px; transform: scale(1.28, 1.28); } .queue-all { cursor: pointer; } </style>";
 

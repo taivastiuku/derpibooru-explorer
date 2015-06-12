@@ -32,10 +32,9 @@ window.Router = Backbone.Router.extend
     console.debug "Initializing router"
     @config = config
     @session = new Session(config.LOGOUT_ENDS_SESSION)
-    @stars = new Stars()
     @imageQueue = new ImageQueue()
 
-    $($(".dropdown_menu")[0]).append("<a href='/images/?highlights'><i class='fa fa-fw fa-birthday-cake'></i> Highlights</a> <a href='/images/?queue'><i class='fa fa-cloud-download'></i> Queue</a>'")
+    $($(".dropdown_menu")[0]).append("<a href='/images/?highlights'><i class='fa fa-fw fa-birthday-cake'></i> Highlights</a> <a href='/images/?queue'><i class='fa fa-cloud-download'></i> Queue</a>")
 
     KeyboardJS.on "e", =>
       console.debug "Next in queue"
@@ -207,7 +206,6 @@ window.ImageView = Backbone.View.extend
   initialize: (options) ->
     @offset = 0
     @recommendations = []
-    @stars = new Stars()
     @image =
       id_number: options.imageId
       is_faved: -> $(".fave_link.faved").length > 0
@@ -254,9 +252,29 @@ window.ImageView = Backbone.View.extend
 
   load: ->
     $.get("https://tiuku.me/api/for-image/#{@image.id_number}?session=#{app.session.id}&offset=#{@offset}", (data) =>
-      @recommendations = @recommendations.concat(data.recommendations)
-      @stars.add(@image.id_number, data.stars) if data.stars
-      @render()
+      ids = _.map(_.filter(data.recommendations, (item) -> item.id isnt null), (item) -> item.id)
+      $.get("https://derpiboo.ru/api/v2/interactions/interacted.json?class=Image&ids=#{ids.join()}", (raw_interactions) =>
+        interactions = {}
+        _.each raw_interactions, (i) ->
+          obj = interactions[i.interactable_id] or {}
+          if i.interaction_type == "faved"
+            obj.faved = true
+          else if i.interaction_type == "voted"
+            obj.voted = i.value
+          interactions[i.interactable_id] = obj
+
+        _.each data.recommendations, (r) ->
+          interaction = interactions[r.id]
+          console.log interaction
+          _.extend(r, interaction) if interaction
+          console.log r
+
+        @recommendations = @recommendations.concat(data.recommendations)
+        console.log @recommendations
+        @render()
+      ).fail ->
+        @recommendations = @recommendations.concat(data.recommendations)
+        @render()
     ).fail ->
       console.debug("Server error")
       @renderFailure()
@@ -264,12 +282,12 @@ window.ImageView = Backbone.View.extend
   renderFailure: ->
     console.debug("Rendering failure message")
     @$el
-      .html(templates.similarImagesStars(appStars: @stars.get()))
+      .html(templates.similarImagesTitle())
       .append("<div>Data load error</div>")
     return @
 
   render: ->
-    @$el.html(templates.similarImagesStars(appStars: @stars.get()))
+    @$el.html(templates.similarImagesTitle())
     if @recommendations.length <= 0
       console.debug("No thumbnails to render")
       @$el.append("<div>No recommendations</div>")
@@ -306,7 +324,7 @@ window.ThumbnailView = Backbone.View.extend
     # TODO Recommendation = Backbone.Model.extend ...
     _.extend @image,
       spoileredTags: spoileredTags
-      isFaved: => _.contains(@image.tags, "faved_by:#{app.session.user}")
+      # isFaved: => _.contains(@image.tags, "faved_by:#{app.session.user}")
       isSpoilered: -> spoileredTags.length > 0
       isQueued: => app.imageQueue.contains(@image.id_number)
     @short_image = @image.image.replace(/__[a-z0-9+_-]+\./, ".")
@@ -333,6 +351,7 @@ window.ThumbnailInfoView = Backbone.View.extend
       .replace(/[/]download[/]/, "/view/")
       .replace(/__[a-z0-9+_-]+\./, ".")
     @image =
+      id: parent.attr("data-image-id")
       id_number: parseInt(@$el.find(".comments_link").attr("href").split("#")[0].slice(1))
       tags: parent.attr("data-image-tag-aliases")
       score: parent.attr("data-upvotes")
@@ -477,27 +496,6 @@ class ImageQueue
         image: ""}
 
 
-class Stars
-  constructor: ->
-    @_stars = JSON.parse(localStorage.getItem("derpStars")) or {}
-
-  get: ->
-    return @_stars
-
-  add: (imageId, stars) ->
-    return if imageId is undefined or _.isEmpty(stars)
-
-    imageStars = @_stars[imageId]
-
-    if imageStars is undefined
-      @_stars[imageId] = stars
-    else
-      _.each stars, (star) =>
-        imageStars.push(star) unless _.contains(imageStars, star)
-
-    localStorage.setItem("derpStars", JSON.stringify(@_stars))
-
-
 class Session
   # Using cookies from userscript seems dangerous
   constructor: (@logoutEndsSession=true) ->
@@ -520,7 +518,6 @@ class Session
     @id = @_makeId()
     localStorage.setItem "derpSession", @id
     localStorage.setItem "derpUser", @user
-    localStorage.setItem "derpStars", null
     localStorage.setItem "derpQueue", null
     localStorage.setItem "derpHistory", null
 
@@ -537,11 +534,8 @@ window.templates.thumbnail = _.template("
 <div class='imageinfo normal'>
     <span>
         <a href='<%= short_image %>' class='id_number' title='<%- image.id_number %>'><i class='fa fa-image'></i> <%- image.id_number %></a>
-        <span class='fave-span<% if (image.isFaved()) {print('-faved');} %>'>
-            <i class='fa fa-star'></i>
-            <span class='favourites'><%- image.favourites %></span>
-        </span>
-        <i class='fa fa-arrow-up vote-up'></i>
+        <span class='fave-span<% if (image.faved == true) {print('-faved');} %>'><i class='fa fa-star'></i> <span class='favourites'><%- image.favourites %></span></span>
+        <span class='vote-up-span<% if (image.voted == 'up') {print('-up-voted');} %>'><i class='fa fa-arrow-up vote-up'></i></span>
         <span class='score'><%- image.score %></span>
         <a href='/<%= image.id_number %>#comments' class='comments_link'><i class='fa fa-comments'></i></a>
 
@@ -587,15 +581,9 @@ window.templates.loadMoreBar = _.template("
 </div>
 ")
 
-window.templates.similarImagesStars = _.template("
+window.templates.similarImagesTitle = _.template("
 <div id='similars-title'>
     <h6>Similar Images</h6>
-    <% _.each(appStars, function(stars, id_number) { %>
-        <% _.each(stars, function(star) { %>
-            <a href='/<%- id_number %>' title='<%- star %>'>
-                <i class='fa fa-star'></i>
-            </a>
-    <% }); }); %>
 </div>
 ")
 
@@ -689,9 +677,17 @@ $("head").append("
     color: white!important;
     background: #c4b246!important;
 }
-.recommender .vote-up {
+
+.recommender .vote-up-span {
     color: #67af2b;
 }
+
+.recommender .vote-up-span-up-voted {
+    display: inline!important;
+    color: white!important;
+    background: #67af2b!important;
+}
+
 .recommender .vote-down {
     color: #cf0001;
 }

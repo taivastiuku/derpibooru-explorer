@@ -52,8 +52,7 @@ config = {
     DEBUG: false,
     LOGOUT_ENDS_SESSION: true,
     KEYBOARD_SHORTCUTS: true,
-    HATS: true,
-    STARS: true
+    HATS: true
 }
 window.runDerpibooruExplorer(config);
 
@@ -75,6 +74,9 @@ window.runDerpibooruExplorer(config);
  *
  * Changelog
  * ---------
+ * v1.2.1  - Use derpibooru api to fetch fave and vote info for recommendation
+ *           thumbnails. Removed stars altogether.
+ *
  * v1.2.0  - Add view for inspecting current queue.
  *
  * v1.1.7  - Add thumbnail enhancements to /lists/:splat urls and "Queue All"
@@ -141,8 +143,7 @@ window.runDerpibooruExplorer(config);
  * --------
  * This userscript adds queue navigation, similar images search, similar artists
  * search, newest images that user might like, some keyboard shortcuts and visual
- * notifications to derpiboo.ru. User can also gain stars when something special
- * happens.
+ * notifications to derpiboo.ru.
  *
  * User can add images to queue from image thumbnails and navigate to the next
  * image in the queue by pressing 'e'.
