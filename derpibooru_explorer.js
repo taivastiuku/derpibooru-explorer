@@ -187,7 +187,6 @@ window.QueueView = Backbone.View.extend({
         return function(item) {
           var image;
           image = app.imageQueue.loadImage(item);
-          console.log(image);
           return _this.$el.append(new ThumbnailView({
             image: image
           }).el);
@@ -353,14 +352,11 @@ window.ImageView = Backbone.View.extend({
           _.each(data.recommendations, function(r) {
             var interaction;
             interaction = interactions[r.id];
-            console.log(interaction);
             if (interaction) {
-              _.extend(r, interaction);
+              return _.extend(r, interaction);
             }
-            return console.log(r);
           });
           _this.recommendations = _this.recommendations.concat(data.recommendations);
-          console.log(_this.recommendations);
           return _this.render();
         }).fail(function() {
           this.recommendations = this.recommendations.concat(data.recommendations);

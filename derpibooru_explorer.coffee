@@ -155,7 +155,6 @@ window.QueueView = Backbone.View.extend
     if queue.length > 0
       _.each queue, (item) =>
         image = app.imageQueue.loadImage(item)
-        console.log image
         @$el.append new ThumbnailView(image: image).el
     else
       @$el.append("<h2>Empty queue</h2>")
@@ -265,12 +264,9 @@ window.ImageView = Backbone.View.extend
 
         _.each data.recommendations, (r) ->
           interaction = interactions[r.id]
-          console.log interaction
           _.extend(r, interaction) if interaction
-          console.log r
 
         @recommendations = @recommendations.concat(data.recommendations)
-        console.log @recommendations
         @render()
       ).fail ->
         @recommendations = @recommendations.concat(data.recommendations)
