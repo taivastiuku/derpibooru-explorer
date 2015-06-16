@@ -20,7 +20,7 @@
  * https://tiuku.me/static/derpibooru_explorer.coffee
  */
 "use strict";
-var ImageQueue, Session, app, booru, hatStyles, inputSelected, videoModeStyles;
+var ImageQueue, Session, app, booru, data2images, hatStyles, inputSelected, videoModeStyles;
 
 app = null;
 
@@ -31,13 +31,42 @@ inputSelected = function() {
   return (ref = document.activeElement.tagName) === "INPUT" || ref === "TEXTAREA";
 };
 
+data2images = function(image_data) {
+  var images, interactions, raw_interactions;
+  images = image_data.images ? image_data.images : image_data.search;
+  raw_interactions = image_data.interactions;
+  interactions = {};
+  _.each(raw_interactions, function(i) {
+    var obj;
+    obj = interactions[i.interactable_id] || {};
+    if (i.interaction_type === "faved") {
+      obj.faved = true;
+    } else if (i.interaction_type === "voted") {
+      obj.voted = i.value;
+    }
+    return interactions[i.interactable_id] = obj;
+  });
+  _.each(images, function(image) {
+    var interaction;
+    image.tags = image.tags.split(", ");
+    interaction = interactions[image.id];
+    if (interaction) {
+      return _.extend(image, interaction);
+    }
+  });
+  return images;
+};
+
 window.Router = Backbone.Router.extend({
   initialize: function(config) {
+    var path;
     console.debug("Initializing router");
     this.config = config;
     this.session = new Session(config.LOGOUT_ENDS_SESSION);
     this.imageQueue = new ImageQueue();
-    $($(".dropdown_menu")[0]).append("<a href='/images/?highlights'><i class='fa fa-fw fa-birthday-cake'></i> Highlights</a> <a href='/images/?queue'><i class='fa fa-cloud-download'></i> Queue</a>");
+    this.imagesPerPage = null;
+    path = window.location.pathname === "/images/" ? "/images" : "/images/";
+    $($(".dropdown_menu")[0]).append("<a href='" + path + "#highlights'><i class='fa fa-fw fa-birthday-cake'></i> Highlights</a> <a href='" + path + "#queue'><i class='fa fa-cloud-download'></i> Queue</a>");
     KeyboardJS.on("e", (function(_this) {
       return function() {
         console.debug("Next in queue");
@@ -57,6 +86,8 @@ window.Router = Backbone.Router.extend({
     "search/index": "thumbs",
     "images": "thumbs",
     "images/": "thumbs",
+    "images/queue": "queue",
+    "images/queue/:page": "queue",
     "images/favourites": "thumbs",
     "images/favourites/:page": "thumbs",
     "images/upvoted": "thumbs",
@@ -77,6 +108,11 @@ window.Router = Backbone.Router.extend({
     "rp/*path": "forum",
     "meta/*path": "forum"
   },
+  fakeNavigate: function() {
+    var params;
+    params = window.location.hash.slice(1).split("/");
+    return this[params[0]](params[1] || null);
+  },
   similarArtists: function(artist_name) {
     var container;
     if (!artist_name) {
@@ -95,17 +131,29 @@ window.Router = Backbone.Router.extend({
     $("#tag_info_box").after("<hr>").after(container);
     return this.thumbs();
   },
-  thumbs: function() {
+  highlights: function(page) {
+    console.debug("Getting recommendations");
     new MetaBarView();
-    if (window.location.search.indexOf("?highlights") > -1) {
-      console.debug("Getting recommendations");
-      return new HighlightsView({
-        user: app.session.user
-      });
-    } else if (window.location.search.indexOf("?queue") > -1) {
-      console.debug("Showing queue");
-      return new QueueView();
+    return new HighlightsView({
+      user: app.session.user
+    });
+  },
+  queue: function(page) {
+    console.debug("Showing queue, page: " + page);
+    new MetaBarView();
+    return new QueueView({
+      page: page,
+      limit: this.imagesPerPage || 21
+    });
+  },
+  thumbs: function() {
+    if (this.imagesPerPage === null) {
+      this.imagesPerPage = $(".image").length;
+    }
+    if (window.location.hash) {
+      return this.fakeNavigate();
     } else {
+      new MetaBarView();
       console.debug("Add queue-button to thumbnails");
       _.each($(".image.bigimage .imageinfo.normal"), function(infoElement) {
         return new ThumbnailInfoView({
@@ -167,29 +215,54 @@ window.Router = Backbone.Router.extend({
 window.QueueView = Backbone.View.extend({
   el: "#imagelist_container",
   initialize: function(options) {
+    this.page = (options.page || 1) - 1;
+    this.limit = options.limit || 21;
+    this.queue = app.imageQueue.list();
     this.$el.html("");
     this.$el.addClass("queue-list");
     return this.render();
   },
   events: function() {
     return {
-      "click .queue-all": "removeAll"
+      "click .queue-all": "removeAll",
+      "click .pagination a": "navigate"
     };
   },
+  navigate: function(event) {
+    this.undelegateEvents();
+    return setTimeout(function() {
+      return app.fakeNavigate();
+    }, 50);
+  },
   render: function() {
-    var queue;
-    queue = app.imageQueue.list();
-    this.$el.append(templates.queueMetabar({
-      count: queue.length
-    }));
+    var meta, queue;
+    meta = {
+      light: false,
+      count: this.queue.length,
+      page: this.page + 1,
+      pages: Math.ceil(this.queue.length / this.limit)
+    };
+    this.$el.append(templates.queueMetabar(meta));
+    queue = this.queue.slice(this.page * this.limit, (this.page + 1) * this.limit);
     if (queue.length > 0) {
-      return _.each(queue, (function(_this) {
-        return function(item) {
-          var image;
-          image = app.imageQueue.loadImage(item);
-          return _this.$el.append(new ThumbnailView({
-            image: image
-          }).el);
+      return $.get("https://derpiboo.ru/search.json?q=id_number%3A" + (queue.join("+||+id_number%3A")), (function(_this) {
+        return function(image_data) {
+          var images;
+          images = _.sortBy(data2images(image_data), function(image) {
+            return queue.indexOf(image.id_number);
+          });
+          _.each(images, function(image) {
+            return _this.$el.append(new ThumbnailView({
+              image: image
+            }).el);
+          });
+          meta.light = true;
+          return _this.$el.append(templates.queueMetabar(meta));
+        };
+      })(this)).fail((function(_this) {
+        return function() {
+          console.debug("Derpibooru API failure");
+          return _this.$el.append("<h2>Derpibooru API failure</h2>");
         };
       })(this));
     } else {
@@ -218,13 +291,28 @@ window.HighlightsView = Backbone.View.extend({
   load: function() {
     return $.get("https://tiuku.me/api/highlights/" + this.user + "?session=" + app.session.id + "&offset=" + this.offset, (function(_this) {
       return function(data) {
-        _this.highlights = _this.highlights.concat(data.recommendations);
-        return _this.render();
+        var ids;
+        ids = _.filter(_.map(data.recommendations, function(item) {
+          return item.id;
+        }), function(id) {
+          return id !== null;
+        });
+        return $.get("https://derpiboo.ru/api/v2/images/show/?ids=" + (ids.join()), function(image_data) {
+          var images;
+          images = _.sortBy(data2images(image_data), function(image) {
+            return ids.indexOf(image.id);
+          });
+          _this.highlights = _this.highlights.concat(images);
+          return _this.render();
+        }).fail(function() {
+          console.debug("Derpibooru API error");
+          return _this.$el.append("<h1>Derpibooru API error</h1>");
+        });
       };
     })(this)).fail((function(_this) {
       return function() {
-        console.debug("Server error");
-        return _this.$el.append("<h1>Server error</h1>");
+        console.debug("Tiuku.me API error");
+        return _this.$el.append("<h1>Tiuku.me API error</h1>");
       };
     })(this));
   },
@@ -328,49 +416,36 @@ window.ImageView = Backbone.View.extend({
     return this.load();
   },
   load: function() {
+    console.debug("Loading recommendations for " + this.image.id_number);
     return $.get("https://tiuku.me/api/for-image/" + this.image.id_number + "?session=" + app.session.id + "&offset=" + this.offset, (function(_this) {
       return function(data) {
         var ids;
-        ids = _.map(_.filter(data.recommendations, function(item) {
-          return item.id !== null;
-        }), function(item) {
+        console.debug("Got recommendations");
+        ids = _.filter(_.map(data.recommendations, function(item) {
           return item.id;
+        }), function(id) {
+          return id !== null;
         });
-        return $.get("https://derpiboo.ru/api/v2/interactions/interacted.json?class=Image&ids=" + (ids.join()), function(raw_interactions) {
-          var interactions;
-          interactions = {};
-          _.each(raw_interactions, function(i) {
-            var obj;
-            obj = interactions[i.interactable_id] || {};
-            if (i.interaction_type === "faved") {
-              obj.faved = true;
-            } else if (i.interaction_type === "voted") {
-              obj.voted = i.value;
-            }
-            return interactions[i.interactable_id] = obj;
+        return $.get("https://derpiboo.ru/api/v2/images/show/?ids=" + (ids.join()), function(image_data) {
+          var images;
+          images = _.sortBy(data2images(image_data), function(image) {
+            return ids.indexOf(image.id);
           });
-          _.each(data.recommendations, function(r) {
-            var interaction;
-            interaction = interactions[r.id];
-            if (interaction) {
-              return _.extend(r, interaction);
-            }
-          });
-          _this.recommendations = _this.recommendations.concat(data.recommendations);
+          _this.recommendations = _this.recommendations.concat(images);
           return _this.render();
         }).fail(function() {
-          this.recommendations = this.recommendations.concat(data.recommendations);
-          return this.render();
+          console.debug("Derpiboo.ru API failure");
+          return this.renderFailure("Derpiboo.ru API failure");
         });
       };
     })(this)).fail(function() {
-      console.debug("Server error");
-      return this.renderFailure();
+      console.debug("Tiuku.me API failure");
+      return this.renderFailure("Tiuku.me API failure");
     });
   },
-  renderFailure: function() {
+  renderFailure: function(msg) {
     console.debug("Rendering failure message");
-    this.$el.html(templates.similarImagesTitle()).append("<div>Data load error</div>");
+    this.$el.html(templates.similarImagesTitle()).append("<div>" + msg + "</div>");
     return this;
   },
   render: function() {
@@ -437,7 +512,8 @@ window.ThumbnailView = Backbone.View.extend({
     return this.$el.append(" ");
   },
   queue: function() {
-    app.imageQueue.toggle(this.image.id_number, this.image);
+    console.debug("Queuing " + this.image.id_number);
+    app.imageQueue.toggle(this.image.id_number);
     return this.render();
   }
 });
@@ -454,8 +530,8 @@ window.ThumbnailInfoView = Backbone.View.extend({
       id_number: parseInt(this.$el.find(".comments_link").attr("href").split("#")[0].slice(1)),
       tags: parent.attr("data-image-tag-aliases"),
       score: parent.attr("data-upvotes"),
-      favourites: parent.attr("data-faves"),
-      thumb: JSON.parse(parent.attr("data-uris")).thumb,
+      faves: parent.attr("data-faves"),
+      representations: JSON.parse(parent.attr("data-uris")),
       image: this.link
     };
     return this.render();
@@ -470,11 +546,11 @@ window.ThumbnailInfoView = Backbone.View.extend({
     this.$el.find(".add-queue").remove();
     this.$el.find(".id_number").remove();
     if (this.type === "big") {
-      this.$el.prepend("<a href='" + this.link + "' class='id_number' title='" + this.image.id_number + "'><i class='fa fa-image'></i> " + this.image.id_number + "</a>");
+      this.$el.prepend("<a href='" + this.link + "' class='id_number' title='" + this.image.id_number + "'><i class='fa fa-image'></i><span class='hide-mobile'> " + this.image.id_number + "</span></a>");
       if (app.imageQueue.contains(this.image.id_number)) {
-        return this.$el.append("<span class='add-queue queued'%><a><i class='fa fa-plus-square'></i> in queue</a></span>");
+        return this.$el.append("<span class='add-queue queued'%><a><i class='fa fa-plus-square'></i><span class='hide-mobile'> in queue</span></a></span>");
       } else {
-        return this.$el.append("<span class='add-queue'><a><i class='fa fa-plus-square'></i> Queue</a></span>");
+        return this.$el.append("<span class='add-queue'><a><i class='fa fa-plus-square'></i><span class='hide-mobile'> Queue</span></a></span>");
       }
     } else if (this.type === "normal") {
       this.$el.prepend("<a href='" + this.link + "' class='id_number' title='" + this.image.id_number + "'><i class='fa fa-image'></i></a>");
@@ -486,7 +562,8 @@ window.ThumbnailInfoView = Backbone.View.extend({
     }
   },
   queue: function() {
-    app.imageQueue.toggle(this.image.id_number, this.image);
+    console.debug("Queuing " + this.image.id_number);
+    app.imageQueue.toggle(this.image.id_number);
     return this.render();
   }
 });
@@ -533,12 +610,10 @@ ImageQueue = (function() {
   }
 
   ImageQueue.prototype.load = function() {
-    this.queue = JSON.parse(localStorage.getItem("derpQueue")) || [];
-    this.history = JSON.parse(localStorage.getItem("derpHistory")) || [];
-    return this.imageCache = JSON.parse(localStorage.getItem("derpCache")) || {};
+    return this.queue = JSON.parse(localStorage.getItem("derpQueue") || "[]") || [];
   };
 
-  ImageQueue.prototype.add = function(id, image) {
+  ImageQueue.prototype.add = function(id) {
     id = parseInt(id);
     if (isNaN(id)) {
       return;
@@ -549,9 +624,6 @@ ImageQueue = (function() {
       fa: "fa-cloud-download"
     });
     this.queue.push(id);
-    if (image) {
-      this.imageCache[id] = image;
-    }
     return this.save();
   };
 
@@ -569,11 +641,10 @@ ImageQueue = (function() {
     this.queue = _.filter(this.queue, function(queue_id) {
       return queue_id !== id;
     });
-    delete this.imageCache[id];
     return this.save();
   };
 
-  ImageQueue.prototype.toggle = function(id, image) {
+  ImageQueue.prototype.toggle = function(id) {
     id = parseInt(id);
     if (isNaN(id)) {
       return;
@@ -583,7 +654,7 @@ ImageQueue = (function() {
     if (_.contains(this.queue, id)) {
       return this.remove(id);
     } else {
-      return this.add(id, image);
+      return this.add(id);
     }
   };
 
@@ -599,8 +670,6 @@ ImageQueue = (function() {
     }
     this.actionCalled = true;
     console.debug("Moving to next: #" + nextId);
-    this.history.unshift(nextId);
-    delete this.imageCache[nextId];
     this.save();
     return document.location = "/" + nextId;
   };
@@ -608,8 +677,8 @@ ImageQueue = (function() {
   ImageQueue.prototype.save = function() {
     console.debug("Saving queue");
     localStorage.setItem("derpQueue", JSON.stringify(this.queue));
-    localStorage.setItem("derpHistory", JSON.stringify(this.history));
-    return localStorage.setItem("derpCache", JSON.stringify(this.imageCache));
+    localStorage.setItem("derpHistory", "");
+    return localStorage.setItem("derpCache", "");
   };
 
   ImageQueue.prototype.contains = function(id) {
@@ -618,22 +687,6 @@ ImageQueue = (function() {
 
   ImageQueue.prototype.list = function() {
     return _.clone(this.queue);
-  };
-
-  ImageQueue.prototype.loadImage = function(id) {
-    if (this.imageCache[id]) {
-      return this.imageCache[id];
-    } else {
-      return {
-        tags: [],
-        id_number: id,
-        short_image: "",
-        score: NaN,
-        favourites: NaN,
-        thumb: "",
-        image: ""
-      };
-    }
   };
 
   return ImageQueue;
@@ -684,7 +737,7 @@ Session = (function() {
 
 window.templates = {};
 
-window.templates.thumbnail = _.template("<div class='imageinfo normal'> <span> <a href='<%= short_image %>' class='id_number' title='<%- image.id_number %>'><i class='fa fa-image'></i> <%- image.id_number %></a> <span class='fave-span<% if (image.faved == true) {print('-faved');} %>'><i class='fa fa-star'></i> <span class='favourites'><%- image.favourites %></span></span> <span class='vote-up-span<% if (image.voted == 'up') {print('-up-voted');} %>'><i class='fa fa-arrow-up vote-up'></i></span> <span class='score'><%- image.score %></span> <a href='/<%= image.id_number %>#comments' class='comments_link'><i class='fa fa-comments'></i></a> <% if (image.isQueued()) { %> <span class='add-queue queued'%><a><i class='fa fa-plus-square'></i> in queue</a></span> <% } else { %> <span class='add-queue'><a><i class='fa fa-plus-square'></i> queue</a></span> <% } %> </span> </div> <div class='image_container thumb'><a href='/<%= image.id_number %>'><% if (image.isSpoilered()) { print(image.spoileredTags.join(', ')); } else { %><img src='<%= image.thumb %>' /><% } %></a></div>");
+window.templates.thumbnail = _.template("<div class='imageinfo normal'> <span> <a href='<%= short_image %>' class='id_number' title='<%- image.id_number %>'><i class='fa fa-image'></i><span class='hide-mobile'> <%- image.id_number %></span></a> <span class='fave-span<% if (image.faved == true) {print('-faved');} %>'><i class='fa fa-star'></i> <span class='favourites'><%- image.faves %></span></span> <span class='vote-up-span<% if (image.voted == 'up') {print('-up-voted');} %>'><i class='fa fa-arrow-up vote-up'></i></span> <span class='score'><%- image.score %></span> <a href='/<%= image.id_number %>#comments' class='comments_link'><i class='fa fa-comments'></i></a> <% if (image.isQueued()) { %> <span class='add-queue queued'%><a><i class='fa fa-plus-square'></i><span class='hide-mobile'> in queue</span></a></span> <% } else { %> <span class='add-queue'><a><i class='fa fa-plus-square'></i><span class='hide-mobile'> queue</span></a></span> <% } %> </span> </div> <div class='image_container thumb'><a href='/<%= image.id_number %>'><% if (image.isSpoilered()) { print(image.spoileredTags.join(', ')); } else { %><img src='<%= image.representations.thumb %>' /><% } %></a></div>");
 
 window.templates.nextInQueueImage = _.template("<div class='image bigimage recommender next-in-queue'> <div class='imageinfo normal spacer'></div> <div class='image_container thumb'> <a>Next in queue <i class='fa fa-arrow-right'></i></a> </div> </div>");
 
@@ -700,7 +753,7 @@ window.templates.artistTag = _.template("<span class='tag tag-ns-artist'> <a hre
 
 window.templates.queueAll = _.template("<a class='queue-all' title='Queue all images on page'> <i class='fa fa-cloud-download'></i> <span class='hide-mobile'>Queue All</span> </a>");
 
-window.templates.queueMetabar = _.template("<div class='metabar meta-table'> <div class='metasection'><strong>Queue of <%- count %> images</strong></div> <div class='othermeta'> <a class='queue-all' title='Remove all images from queue'> <i class='fa fa-cloud-download'></i> <span class='hide-mobile'>Remove All</span> </a> </div> </div>");
+window.templates.queueMetabar = _.template("<div class='metabar meta-table<% if (light) { print(' metabar-light') } %>'> <div class='metasection'> <strong>Queue of <%- count %> images</strong> <div class='pagination'> <nav class='pagination'> <% if (page > 1) { %> <span class='first'><a href='/images/#queue/'>« First</a></span> <span class='prev'><a href='/images/#queue/<% print(page - 1) %>'>‹ Prev</a></span> <% } if (page > 5) { %> <span class='page gap'>…</span> <% } for (var i = Math.max(page - 4, 1); i < page; i++) { %> <span class='page'><a href='/images/#queue/<%- i %>'><%- i %></a></span> <% } if (pages > 1) { %> <span class='page current'><%- page %></span> <% } for (var i = page + 1; i < page + 5 && i <= pages; i++) { %> <span class='page'><a href='/images/#queue/<%- i %>'><%- i %></a></span> <% } if (page + 5 < pages) { %> <span class='page gap'>…</span> <% } if (pages > 1 && page < pages) { %> <span class='next'><a href='/images/#queue/<% print(page + 1) %>'>Next ›</a></span> <span class='last'><a href='/images/#queue/'>Last »</a></span> <% } %> </nav> </div> </div> <div class='othermeta'> <a class='queue-all' title='Remove all images from queue'> <i class='fa fa-cloud-download'></i> <span class='hide-mobile'>Remove All</span> </a> </div> </div>");
 
 videoModeStyles = "<style type='text/css'> .image_show_container { width: 720px; display: inline-block; } #imagelist_container.recommender { display: inline-block; width: 528px; height: 720px; overflow-y: scroll; vertical-align: top; #image_display { max-width: 100%; height: auto; } </style>";
 

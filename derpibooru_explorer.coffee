@@ -26,6 +26,24 @@ booru = unsafeWindow.booru
 
 inputSelected = -> document.activeElement.tagName in ["INPUT", "TEXTAREA"]
 
+data2images = (image_data) ->
+  images = if image_data.images then image_data.images else image_data.search
+  raw_interactions = image_data.interactions
+  interactions = {}
+  _.each raw_interactions, (i) ->
+    obj = interactions[i.interactable_id] or {}
+    if i.interaction_type == "faved"
+      obj.faved = true
+    else if i.interaction_type == "voted"
+      obj.voted = i.value
+    interactions[i.interactable_id] = obj
+
+  _.each images, (image) ->
+    image.tags = image.tags.split(", ")
+    interaction = interactions[image.id]
+    _.extend(image, interaction) if interaction
+  return images
+
 
 window.Router = Backbone.Router.extend
   initialize: (config) ->
@@ -33,8 +51,10 @@ window.Router = Backbone.Router.extend
     @config = config
     @session = new Session(config.LOGOUT_ENDS_SESSION)
     @imageQueue = new ImageQueue()
+    @imagesPerPage = null
 
-    $($(".dropdown_menu")[0]).append("<a href='/images/?highlights'><i class='fa fa-fw fa-birthday-cake'></i> Highlights</a> <a href='/images/?queue'><i class='fa fa-cloud-download'></i> Queue</a>")
+    path = if window.location.pathname == "/images/" then "/images" else "/images/"
+    $($(".dropdown_menu")[0]).append("<a href='#{path}#highlights'><i class='fa fa-fw fa-birthday-cake'></i> Highlights</a> <a href='#{path}#queue'><i class='fa fa-cloud-download'></i> Queue</a>")
 
     KeyboardJS.on "e", =>
       console.debug "Next in queue"
@@ -51,6 +71,8 @@ window.Router = Backbone.Router.extend
     "search/index": "thumbs"
     "images": "thumbs"
     "images/": "thumbs"
+    "images/queue": "queue"
+    "images/queue/:page": "queue"
     "images/favourites": "thumbs"
     "images/favourites/:page": "thumbs"
     "images/upvoted": "thumbs"
@@ -73,6 +95,9 @@ window.Router = Backbone.Router.extend
     "rp/*path": "forum"
     "meta/*path": "forum"
 
+  fakeNavigate: ->
+      params = window.location.hash.slice(1).split("/")
+      @[params[0]](params[1] or null)
 
   similarArtists: (artist_name) ->
     return unless artist_name
@@ -91,15 +116,25 @@ window.Router = Backbone.Router.extend
 
     @thumbs()
 
-  thumbs:  ->
+  highlights: (page) ->
+    console.debug "Getting recommendations"
     new MetaBarView()
-    if window.location.search.indexOf("?highlights") > -1
-      console.debug "Getting recommendations"
-      new HighlightsView(user: app.session.user)
-    else if window.location.search.indexOf("?queue") > -1
-      console.debug "Showing queue"
-      new QueueView()
+    new HighlightsView(user: app.session.user)
+
+  queue: (page) ->
+    console.debug "Showing queue, page: #{page}"
+    new MetaBarView()
+
+    new QueueView({page: page, limit: @imagesPerPage or 21})
+
+  thumbs:  ->
+    @imagesPerPage = $(".image").length if @imagesPerPage is null
+
+    if window.location.hash
+      @fakeNavigate()
+
     else
+      new MetaBarView()
       console.debug "Add queue-button to thumbnails"
       _.each $(".image.bigimage .imageinfo.normal"), (infoElement) ->
         new ThumbnailInfoView({el: infoElement, type: "big"})
@@ -142,20 +177,45 @@ window.Router = Backbone.Router.extend
 window.QueueView = Backbone.View.extend
   el: "#imagelist_container"
   initialize: (options) ->
+    @page = (options.page or 1) - 1
+    @limit = options.limit or 21
+    @queue = app.imageQueue.list()
     @$el.html("")
     @$el.addClass("queue-list")
     @render()
 
   events: ->
     "click .queue-all": "removeAll"
+    "click .pagination a": "navigate"
+
+  navigate: (event) ->
+    @undelegateEvents()
+    setTimeout( ->
+      app.fakeNavigate()
+    , 50)
 
   render: ->
-    queue = app.imageQueue.list()
-    @$el.append(templates.queueMetabar(count: queue.length))
+    meta =
+      light: false
+      count: @queue.length
+      page: @page + 1
+      pages: Math.ceil(@queue.length / @limit)
+
+    @$el.append(templates.queueMetabar(meta))
+
+    queue = @queue.slice(@page * @limit, (@page + 1) * @limit)
     if queue.length > 0
-      _.each queue, (item) =>
-        image = app.imageQueue.loadImage(item)
-        @$el.append new ThumbnailView(image: image).el
+      $.get("https://derpiboo.ru/search.json?q=id_number%3A#{queue.join("+||+id_number%3A")}", (image_data) =>
+        images = _.sortBy data2images(image_data), (image) ->
+          queue.indexOf(image.id_number)
+        _.each images, (image) =>
+          @$el.append new ThumbnailView(image: image).el
+        meta.light = true
+        @$el.append(templates.queueMetabar(meta))
+      ).fail =>
+        console.debug("Derpibooru API failure")
+        @$el.append("<h2>Derpibooru API failure</h2>")
+
     else
       @$el.append("<h2>Empty queue</h2>")
 
@@ -178,11 +238,17 @@ window.HighlightsView = Backbone.View.extend
 
   load: ->
     $.get("https://tiuku.me/api/highlights/#{@user}?session=#{app.session.id}&offset=#{@offset}", (data) =>
-      @highlights = @highlights.concat(data.recommendations)
-      @render()
+      ids = _.filter _.map(data.recommendations, (item) -> item.id), (id) -> id isnt null
+      $.get("https://derpiboo.ru/api/v2/images/show/?ids=#{ids.join()}", (image_data) =>
+        images = _.sortBy(data2images(image_data), (image) -> ids.indexOf(image.id))
+        @highlights = @highlights.concat(images)
+        @render()
+      ).fail =>
+        console.debug("Derpibooru API error")
+        @$el.append("<h1>Derpibooru API error</h1>")
     ).fail =>
-      console.debug("Server error")
-      @$el.append("<h1>Server error</h1>")
+      console.debug("Tiuku.me API error")
+      @$el.append("<h1>Tiuku.me API error</h1>")
 
   render: ->
     @$el.html("<div class='metabar'><div class='metasection'><strong>Highlighted images for #{@user}</srong></div></div>")
@@ -250,36 +316,26 @@ window.ImageView = Backbone.View.extend
     @load()
 
   load: ->
+    console.debug("Loading recommendations for #{@image.id_number}")
     $.get("https://tiuku.me/api/for-image/#{@image.id_number}?session=#{app.session.id}&offset=#{@offset}", (data) =>
-      ids = _.map(_.filter(data.recommendations, (item) -> item.id isnt null), (item) -> item.id)
-      $.get("https://derpiboo.ru/api/v2/interactions/interacted.json?class=Image&ids=#{ids.join()}", (raw_interactions) =>
-        interactions = {}
-        _.each raw_interactions, (i) ->
-          obj = interactions[i.interactable_id] or {}
-          if i.interaction_type == "faved"
-            obj.faved = true
-          else if i.interaction_type == "voted"
-            obj.voted = i.value
-          interactions[i.interactable_id] = obj
-
-        _.each data.recommendations, (r) ->
-          interaction = interactions[r.id]
-          _.extend(r, interaction) if interaction
-
-        @recommendations = @recommendations.concat(data.recommendations)
+      console.debug("Got recommendations")
+      ids = _.filter _.map(data.recommendations, (item) -> item.id), (id) -> id isnt null
+      $.get("https://derpiboo.ru/api/v2/images/show/?ids=#{ids.join()}", (image_data) =>
+        images = _.sortBy(data2images(image_data), (image) -> ids.indexOf(image.id))
+        @recommendations = @recommendations.concat(images)
         @render()
       ).fail ->
-        @recommendations = @recommendations.concat(data.recommendations)
-        @render()
+        console.debug("Derpiboo.ru API failure")
+        @renderFailure("Derpiboo.ru API failure")
     ).fail ->
-      console.debug("Server error")
-      @renderFailure()
+      console.debug("Tiuku.me API failure")
+      @renderFailure("Tiuku.me API failure")
 
-  renderFailure: ->
+  renderFailure: (msg) ->
     console.debug("Rendering failure message")
     @$el
       .html(templates.similarImagesTitle())
-      .append("<div>Data load error</div>")
+      .append("<div>#{msg}</div>")
     return @
 
   render: ->
@@ -294,7 +350,6 @@ window.ImageView = Backbone.View.extend
         if hiddenTags.length <= 0
           @$el.append new ThumbnailView(image: item).el
           @$el.append(" ")
-
 
       if app.config.VIDEO_MODE is true
         @$el.append(templates.loadMoreBar())
@@ -333,7 +388,8 @@ window.ThumbnailView = Backbone.View.extend
     @$el.append(" ")
 
   queue: ->
-    app.imageQueue.toggle(@image.id_number, @image)
+    console.debug("Queuing #{@image.id_number}")
+    app.imageQueue.toggle(@image.id_number)
     @render()
 
 
@@ -351,8 +407,8 @@ window.ThumbnailInfoView = Backbone.View.extend
       id_number: parseInt(@$el.find(".comments_link").attr("href").split("#")[0].slice(1))
       tags: parent.attr("data-image-tag-aliases")
       score: parent.attr("data-upvotes")
-      favourites: parent.attr("data-faves")
-      thumb: JSON.parse(parent.attr("data-uris")).thumb
+      faves: parent.attr("data-faves")
+      representations: JSON.parse(parent.attr("data-uris"))
       image: @link
 
     @render()
@@ -366,11 +422,11 @@ window.ThumbnailInfoView = Backbone.View.extend
     @$el.find(".id_number").remove()
 
     if @type == "big"
-      @$el.prepend("<a href='#{@link}' class='id_number' title='#{@image.id_number}'><i class='fa fa-image'></i> #{@image.id_number}</a>")
+      @$el.prepend("<a href='#{@link}' class='id_number' title='#{@image.id_number}'><i class='fa fa-image'></i><span class='hide-mobile'> #{@image.id_number}</span></a>")
       if app.imageQueue.contains(@image.id_number)
-        @$el.append("<span class='add-queue queued'%><a><i class='fa fa-plus-square'></i> in queue</a></span>")
+        @$el.append("<span class='add-queue queued'%><a><i class='fa fa-plus-square'></i><span class='hide-mobile'> in queue</span></a></span>")
       else
-        @$el.append("<span class='add-queue'><a><i class='fa fa-plus-square'></i> Queue</a></span>")
+        @$el.append("<span class='add-queue'><a><i class='fa fa-plus-square'></i><span class='hide-mobile'> Queue</span></a></span>")
 
     else if @type == "normal"
       @$el.prepend("<a href='#{@link}' class='id_number' title='#{@image.id_number}'><i class='fa fa-image'></i></a>")
@@ -380,7 +436,8 @@ window.ThumbnailInfoView = Backbone.View.extend
         @$el.append("<span class='add-queue'><a><i class='fa fa-plus-square'></i></a></span>")
 
   queue: ->
-    app.imageQueue.toggle(@image.id_number, @image)
+    console.debug("Queuing #{@image.id_number}")
+    app.imageQueue.toggle(@image.id_number)
     @render()
 
 
@@ -418,11 +475,10 @@ class ImageQueue
     @actionCalled = false
 
   load: ->
-    @queue = JSON.parse(localStorage.getItem("derpQueue")) or []
-    @history = JSON.parse(localStorage.getItem("derpHistory")) or []
-    @imageCache = JSON.parse(localStorage.getItem("derpCache")) or {}
+    @queue = JSON.parse(localStorage.getItem("derpQueue") or "[]") or []
+    # @history = JSON.parse(localStorage.getItem("derpHistory")) or []
 
-  add: (id, image) ->
+  add: (id) ->
     id = parseInt(id)
     return if isNaN(id)
     console.debug("Adding ##{id} to queue")
@@ -430,7 +486,6 @@ class ImageQueue
              # have the most current queue.
     new NotificationView(fa: "fa-cloud-download")
     @queue.push(id)
-    @imageCache[id] = image if image
     @save()
 
   remove: (id) ->
@@ -440,10 +495,9 @@ class ImageQueue
     @load()
     new NotificationView(fa: "fa-cloud-download", off: true)
     @queue = _.filter @queue, (queue_id) -> queue_id != id
-    delete @imageCache[id]
     @save()
 
-  toggle: (id, image) ->
+  toggle: (id) ->
     id = parseInt(id)
     return if isNaN(id)
     console.debug("Toggling ##{id}")
@@ -451,7 +505,7 @@ class ImageQueue
     if _.contains(@queue, id)
       @remove(id)
     else
-      @add(id, image)
+      @add(id)
 
   next: ->
     new NotificationView(fa: "fa-arrow-right")
@@ -463,33 +517,19 @@ class ImageQueue
     @actionCalled = true
 
     console.debug("Moving to next: ##{nextId}")
-    @history.unshift(nextId)
-    delete @imageCache[nextId]
+    # @history.unshift(nextId)
     @save()
     document.location = "/#{nextId}"
 
   save: ->
     console.debug("Saving queue")
     localStorage.setItem("derpQueue", JSON.stringify(@queue))
-    localStorage.setItem("derpHistory", JSON.stringify(@history))
-    localStorage.setItem("derpCache", JSON.stringify(@imageCache))
+    localStorage.setItem("derpHistory", "")
+    localStorage.setItem("derpCache", "")
 
   contains: (id) -> _.contains(@queue, id)
 
   list: -> _.clone(@queue)
-
-  loadImage: (id) ->
-    if @imageCache[id]
-      return @imageCache[id]
-    else
-      return {
-        tags: []
-        id_number: id
-        short_image: ""
-        score: NaN
-        favourites: NaN
-        thumb: ""
-        image: ""}
 
 
 class Session
@@ -529,20 +569,20 @@ window.templates = {}
 window.templates.thumbnail = _.template("
 <div class='imageinfo normal'>
     <span>
-        <a href='<%= short_image %>' class='id_number' title='<%- image.id_number %>'><i class='fa fa-image'></i> <%- image.id_number %></a>
-        <span class='fave-span<% if (image.faved == true) {print('-faved');} %>'><i class='fa fa-star'></i> <span class='favourites'><%- image.favourites %></span></span>
+        <a href='<%= short_image %>' class='id_number' title='<%- image.id_number %>'><i class='fa fa-image'></i><span class='hide-mobile'> <%- image.id_number %></span></a>
+        <span class='fave-span<% if (image.faved == true) {print('-faved');} %>'><i class='fa fa-star'></i> <span class='favourites'><%- image.faves %></span></span>
         <span class='vote-up-span<% if (image.voted == 'up') {print('-up-voted');} %>'><i class='fa fa-arrow-up vote-up'></i></span>
         <span class='score'><%- image.score %></span>
         <a href='/<%= image.id_number %>#comments' class='comments_link'><i class='fa fa-comments'></i></a>
 
         <% if (image.isQueued()) { %>
-        <span class='add-queue queued'%><a><i class='fa fa-plus-square'></i> in queue</a></span>
+        <span class='add-queue queued'%><a><i class='fa fa-plus-square'></i><span class='hide-mobile'> in queue</span></a></span>
         <% } else { %>
-        <span class='add-queue'><a><i class='fa fa-plus-square'></i> queue</a></span>
+        <span class='add-queue'><a><i class='fa fa-plus-square'></i><span class='hide-mobile'> queue</span></a></span>
         <% } %>
     </span>
 </div>
-<div class='image_container thumb'><a href='/<%= image.id_number %>'><% if (image.isSpoilered()) { print(image.spoileredTags.join(', ')); } else { %><img src='<%= image.thumb %>' /><% } %></a></div>
+<div class='image_container thumb'><a href='/<%= image.id_number %>'><% if (image.isSpoilered()) { print(image.spoileredTags.join(', ')); } else { %><img src='<%= image.representations.thumb %>' /><% } %></a></div>
 ")
 
 window.templates.nextInQueueImage = _.template("
@@ -597,13 +637,37 @@ window.templates.queueAll = _.template("
 ")
 
 window.templates.queueMetabar = _.template("
-<div class='metabar meta-table'>
-    <div class='metasection'><strong>Queue of <%- count %> images</strong></div>
+<div class='metabar meta-table<% if (light) { print(' metabar-light') } %>'>
+    <div class='metasection'>
+        <strong>Queue of <%- count %> images</strong>
+        <div class='pagination'>
+            <nav class='pagination'>
+                <% if (page > 1) { %>
+                <span class='first'><a href='/images/#queue/'>« First</a></span>
+                <span class='prev'><a href='/images/#queue/<% print(page - 1) %>'>‹ Prev</a></span>
+                <% } if (page > 5) { %>
+                <span class='page gap'>…</span>
+                <% } for (var i = Math.max(page - 4, 1); i < page; i++) { %>
+                <span class='page'><a href='/images/#queue/<%- i %>'><%- i %></a></span>
+                <% } if (pages > 1) { %>
+                <span class='page current'><%- page %></span>
+                <% } for (var i = page + 1; i < page + 5 && i <= pages; i++) { %>
+                <span class='page'><a href='/images/#queue/<%- i %>'><%- i %></a></span>
+                <% } if (page + 5 < pages) { %>
+                <span class='page gap'>…</span>
+                <% } if (pages > 1 && page < pages) { %>
+                <span class='next'><a href='/images/#queue/<% print(page + 1) %>'>Next ›</a></span>
+                <span class='last'><a href='/images/#queue/'>Last »</a></span>
+                <% } %>
+            </nav>
+        </div>
+    </div>
     <div class='othermeta'>
         <a class='queue-all' title='Remove all images from queue'>
             <i class='fa fa-cloud-download'></i>
             <span class='hide-mobile'>Remove All</span>
         </a>
+
     </div>
 </div>
 ")

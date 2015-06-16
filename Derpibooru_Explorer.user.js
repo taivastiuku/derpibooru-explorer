@@ -2,7 +2,7 @@
 // @name       Derpibooru Explorer
 // @author     taivastiuku@gmail.com
 // @namespace  https://tiuku.me/
-// @version    1.2.1
+// @version    1.3.0
 
 // @description Add recommendations and UX enhancements to derpiboo.ru
 // @match      https://derpiboo.ru/*
@@ -15,7 +15,7 @@
 // @require    https://tiuku.me/static/lodash.underscore.min.js
 // @require    https://tiuku.me/static/backbone-min.js
 // @require    https://tiuku.me/static/keyboard.min.js
-// @require	   https://tiuku.me/static/derpibooru_explorer.js?1.2.1
+// @require	   https://tiuku.me/static/derpibooru_explorer.js?1.3.0
 // @grant      unsafeWindow
 // ==/UserScript==
 
@@ -74,6 +74,8 @@ window.runDerpibooruExplorer(config);
  *
  * Changelog
  * ---------
+ * v1.3.0  - Refactor how APIs are used, paginated queue view.
+ *
  * v1.2.1  - Use derpibooru api to fetch fave and vote info for recommendation
  *           thumbnails. Removed stars altogether.
  *
