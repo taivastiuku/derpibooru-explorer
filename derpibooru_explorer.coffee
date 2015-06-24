@@ -204,9 +204,11 @@ window.QueueView = Backbone.View.extend
     @$el.append(templates.queueMetabar(meta))
 
     queue = @queue.slice(@page * @limit, (@page + 1) * @limit)
+    console.log(queue)
     if queue.length > 0
       $.get("https://derpiboo.ru/search.json?q=id_number%3A#{queue.join("+||+id_number%3A")}", (image_data) =>
         images = _.sortBy data2images(image_data), (image) ->
+          console.log([image.id_number, queue.indexOf(image.id_number)])
           queue.indexOf(image.id_number)
         _.each images, (image) =>
           @$el.append new ThumbnailView(image: image).el
@@ -239,7 +241,7 @@ window.HighlightsView = Backbone.View.extend
   load: ->
     $.get("https://tiuku.me/api/highlights/#{@user}?session=#{app.session.id}&offset=#{@offset}", (data) =>
       ids = _.filter _.map(data.recommendations, (item) -> item.id), (id) -> id isnt null
-      $.get("https://derpiboo.ru/api/v2/images/show/?ids=#{ids.join()}", (image_data) =>
+      $.get("/api/v2/images/show/?ids=#{ids.join()}", (image_data) =>
         images = _.sortBy(data2images(image_data), (image) -> ids.indexOf(image.id))
         @highlights = @highlights.concat(images)
         @render()
@@ -320,7 +322,7 @@ window.ImageView = Backbone.View.extend
     $.get("https://tiuku.me/api/for-image/#{@image.id_number}?session=#{app.session.id}&offset=#{@offset}", (data) =>
       console.debug("Got recommendations")
       ids = _.filter _.map(data.recommendations, (item) -> item.id), (id) -> id isnt null
-      $.get("https://derpiboo.ru/api/v2/images/show/?ids=#{ids.join()}", (image_data) =>
+      $.get("/api/v2/images/show/?ids=#{ids.join()}", (image_data) =>
         images = _.sortBy(data2images(image_data), (image) -> ids.indexOf(image.id))
         @recommendations = @recommendations.concat(images)
         @render()
@@ -656,8 +658,8 @@ window.templates.queueMetabar = _.template("
                 <% } if (page + 5 < pages) { %>
                 <span class='page gap'>…</span>
                 <% } if (pages > 1 && page < pages) { %>
-                <span class='next'><a href='/images/#queue/<% print(page + 1) %>'>Next ›</a></span>
-                <span class='last'><a href='/images/#queue/'>Last »</a></span>
+                <span class='next'><a href='/images/#queue/<% print(page + 1) %>'>Next</a></span>
+                <span class='last'><a href='/images/#queue/'>Last</a></span>
                 <% } %>
             </nav>
         </div>

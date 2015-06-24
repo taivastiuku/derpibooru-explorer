@@ -244,11 +244,13 @@ window.QueueView = Backbone.View.extend({
     };
     this.$el.append(templates.queueMetabar(meta));
     queue = this.queue.slice(this.page * this.limit, (this.page + 1) * this.limit);
+    console.log(queue);
     if (queue.length > 0) {
       return $.get("https://derpiboo.ru/search.json?q=id_number%3A" + (queue.join("+||+id_number%3A")), (function(_this) {
         return function(image_data) {
           var images;
           images = _.sortBy(data2images(image_data), function(image) {
+            console.log([image.id_number, queue.indexOf(image.id_number)]);
             return queue.indexOf(image.id_number);
           });
           _.each(images, function(image) {
@@ -297,7 +299,7 @@ window.HighlightsView = Backbone.View.extend({
         }), function(id) {
           return id !== null;
         });
-        return $.get("https://derpiboo.ru/api/v2/images/show/?ids=" + (ids.join()), function(image_data) {
+        return $.get("/api/v2/images/show/?ids=" + (ids.join()), function(image_data) {
           var images;
           images = _.sortBy(data2images(image_data), function(image) {
             return ids.indexOf(image.id);
@@ -426,7 +428,7 @@ window.ImageView = Backbone.View.extend({
         }), function(id) {
           return id !== null;
         });
-        return $.get("https://derpiboo.ru/api/v2/images/show/?ids=" + (ids.join()), function(image_data) {
+        return $.get("/api/v2/images/show/?ids=" + (ids.join()), function(image_data) {
           var images;
           images = _.sortBy(data2images(image_data), function(image) {
             return ids.indexOf(image.id);
@@ -753,7 +755,7 @@ window.templates.artistTag = _.template("<span class='tag tag-ns-artist'> <a hre
 
 window.templates.queueAll = _.template("<a class='queue-all' title='Queue all images on page'> <i class='fa fa-cloud-download'></i> <span class='hide-mobile'>Queue All</span> </a>");
 
-window.templates.queueMetabar = _.template("<div class='metabar meta-table<% if (light) { print(' metabar-light') } %>'> <div class='metasection'> <strong>Queue of <%- count %> images</strong> <div class='pagination'> <nav class='pagination'> <% if (page > 1) { %> <span class='first'><a href='/images/#queue/'>« First</a></span> <span class='prev'><a href='/images/#queue/<% print(page - 1) %>'>‹ Prev</a></span> <% } if (page > 5) { %> <span class='page gap'>…</span> <% } for (var i = Math.max(page - 4, 1); i < page; i++) { %> <span class='page'><a href='/images/#queue/<%- i %>'><%- i %></a></span> <% } if (pages > 1) { %> <span class='page current'><%- page %></span> <% } for (var i = page + 1; i < page + 5 && i <= pages; i++) { %> <span class='page'><a href='/images/#queue/<%- i %>'><%- i %></a></span> <% } if (page + 5 < pages) { %> <span class='page gap'>…</span> <% } if (pages > 1 && page < pages) { %> <span class='next'><a href='/images/#queue/<% print(page + 1) %>'>Next ›</a></span> <span class='last'><a href='/images/#queue/'>Last »</a></span> <% } %> </nav> </div> </div> <div class='othermeta'> <a class='queue-all' title='Remove all images from queue'> <i class='fa fa-cloud-download'></i> <span class='hide-mobile'>Remove All</span> </a> </div> </div>");
+window.templates.queueMetabar = _.template("<div class='metabar meta-table<% if (light) { print(' metabar-light') } %>'> <div class='metasection'> <strong>Queue of <%- count %> images</strong> <div class='pagination'> <nav class='pagination'> <% if (page > 1) { %> <span class='first'><a href='/images/#queue/'>« First</a></span> <span class='prev'><a href='/images/#queue/<% print(page - 1) %>'>‹ Prev</a></span> <% } if (page > 5) { %> <span class='page gap'>…</span> <% } for (var i = Math.max(page - 4, 1); i < page; i++) { %> <span class='page'><a href='/images/#queue/<%- i %>'><%- i %></a></span> <% } if (pages > 1) { %> <span class='page current'><%- page %></span> <% } for (var i = page + 1; i < page + 5 && i <= pages; i++) { %> <span class='page'><a href='/images/#queue/<%- i %>'><%- i %></a></span> <% } if (page + 5 < pages) { %> <span class='page gap'>…</span> <% } if (pages > 1 && page < pages) { %> <span class='next'><a href='/images/#queue/<% print(page + 1) %>'>Next</a></span> <span class='last'><a href='/images/#queue/'>Last</a></span> <% } %> </nav> </div> </div> <div class='othermeta'> <a class='queue-all' title='Remove all images from queue'> <i class='fa fa-cloud-download'></i> <span class='hide-mobile'>Remove All</span> </a> </div> </div>");
 
 videoModeStyles = "<style type='text/css'> .image_show_container { width: 720px; display: inline-block; } #imagelist_container.recommender { display: inline-block; width: 528px; height: 720px; overflow-y: scroll; vertical-align: top; #image_display { max-width: 100%; height: auto; } </style>";
 
