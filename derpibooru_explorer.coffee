@@ -2,7 +2,7 @@
 
 ###* @license
 # Derpibooru Explorer
-# Copyright (C) 2014 taivastiuku@gmail.com
+# Copyright (C) 2014-2015 taivastiuku@gmail.com
 #
 # This program is free software; you can redistribute it and/or
 # modify it under the terms of the GNU General Public License
@@ -25,6 +25,7 @@ app = null
 booru = unsafeWindow.booru
 
 inputSelected = -> document.activeElement.tagName in ["INPUT", "TEXTAREA"]
+csrfToken = -> $("input[name=authenticity_token]")[0].value
 
 data2images = (image_data) ->
   images = if image_data.images then image_data.images else image_data.search
@@ -39,7 +40,10 @@ data2images = (image_data) ->
     interactions[i.interactable_id] = obj
 
   _.each images, (image) ->
-    image.tags = image.tags.split(", ")
+    if image.tags
+      image.tags = image.tags.split(", ")
+    else
+      image.tags = []
     interaction = interactions[image.id]
     _.extend(image, interaction) if interaction
   return images
@@ -314,6 +318,7 @@ window.ImageView = Backbone.View.extend
 
   loadMore: (event) ->
     $(event.target).remove()
+
     @offset += 8
     @load()
 
@@ -370,6 +375,9 @@ window.ThumbnailView = Backbone.View.extend
 
   events:
     "click .add-queue": "queue"
+    "click .vote_up_link": "voteUp"
+    "click .vote_down_link": "voteDown"
+    "click .fave_link": "fave"
 
   initialize: (options) ->
     @image = options.image
@@ -380,8 +388,15 @@ window.ThumbnailView = Backbone.View.extend
       # isFaved: => _.contains(@image.tags, "faved_by:#{app.session.user}")
       isSpoilered: -> spoileredTags.length > 0
       isQueued: => app.imageQueue.contains(@image.id_number)
-    @short_image = @image.image.replace(/__[a-z0-9+_-]+\./, ".")
-    @render()
+
+    if @image.deletion_reason isnt undefined
+      @renderDeleted()
+    else if @image.duplicate_of isnt undefined
+      @short_image = ""
+      @$el.html("<div class='image_container thumb'><a href='/#{@image.duplicate_of}'>Duplicate of #{@image.duplicate_of}</a></div>")
+    else
+      @short_image = @image.image.replace(/__[a-z0-9+_-]+\./, ".")
+      @render()
 
   render: ->
     @$el.html templates.thumbnail
@@ -389,10 +404,61 @@ window.ThumbnailView = Backbone.View.extend
       short_image: @short_image
     @$el.append(" ")
 
+  renderDeleted: ->
+    @$el.html templates.thumbnailDeleted
+      image: @image
+    @$el.append(" ")
+
   queue: ->
     console.debug("Queuing #{@image.id_number}")
     app.imageQueue.toggle(@image.id_number)
     @render()
+
+  fave: (event) ->
+    event.preventDefault()
+    putData =
+      _method: "PUT"
+      id: @image.id
+      value: if @image.faved is true then false else true
+      class: "Image"
+
+    $.ajax
+      url: "/api/v2/interactions/fave"
+      data: putData
+      type: "PUT"
+      headers:
+        "X-CSRF-Token": csrfToken()
+      dataType: "json"
+      success: (voteData) =>
+        @image.faved = putData.value
+        if @image.faved is true
+          @image.voted = "up"
+        _.extend(@image, voteData)
+        @render()
+
+  voteUp: (event) -> @vote(event, "up")
+
+  voteDown: (event) -> @vote(event, "down")
+
+  vote: (event, dir) ->
+    event.preventDefault()
+    putData =
+      _method: "PUT"
+      id: @image.id
+      value: if @image.voted == dir then false else dir
+      class: "Image"
+
+    $.ajax
+      url: "/api/v2/interactions/vote"
+      data: putData
+      type: "PUT"
+      headers:
+        "X-CSRF-Token": csrfToken()
+      dataType: "json"
+      success: (voteData) =>
+        @image.voted = putData.value
+        _.extend(@image, voteData)
+        @render()
 
 
 window.ThumbnailInfoView = Backbone.View.extend
@@ -572,9 +638,10 @@ window.templates.thumbnail = _.template("
 <div class='imageinfo normal'>
     <span>
         <a href='<%= short_image %>' class='id_number' title='<%- image.id_number %>'><i class='fa fa-image'></i><span class='hide-mobile'> <%- image.id_number %></span></a>
-        <span class='fave-span<% if (image.faved == true) {print('-faved');} %>'><i class='fa fa-star'></i> <span class='favourites'><%- image.faves %></span></span>
-        <span class='vote-up-span<% if (image.voted == 'up') {print('-up-voted');} %>'><i class='fa fa-arrow-up vote-up'></i></span>
+        <a class='fave_link' href='#'><span class='fave-span<% if (image.faved == true) {print('-faved');} %>'><i class='fa fa-star'></i> <span class='favourites'><%- image.faves %></span></span></a>
+        <a class='vote_up_link' href='#'><span class='vote-up-span<% if (image.voted == 'up') {print('-up-voted');} %>'><i class='fa fa-arrow-up vote-up'></i></span></a>
         <span class='score'><%- image.score %></span>
+        <a class='vote_down_link' href='#'><span class='vote-down-span<% if (image.voted == 'down') {print('-down-voted');} %>'><i class='fa fa-arrow-down' title='neigh'></i></a>
         <a href='/<%= image.id_number %>#comments' class='comments_link'><i class='fa fa-comments'></i></a>
 
         <% if (image.isQueued()) { %>
@@ -587,6 +654,14 @@ window.templates.thumbnail = _.template("
 <div class='image_container thumb'><a href='/<%= image.id_number %>'><% if (image.isSpoilered()) { print(image.spoileredTags.join(', ')); } else { %><img src='<%= image.representations.thumb %>' /><% } %></a></div>
 ")
 
+window.templates.thumbnailDeleted = _.template("
+<div class='imageinfo normal'>
+    <span><%- image.id_number %></span>
+</div>
+<div class='image_container thumb'><span><%- image.deletion_reason %></span></div>
+")
+
+
 window.templates.nextInQueueImage = _.template("
 <div class='image bigimage recommender next-in-queue'>
     <div class='imageinfo normal spacer'></div>
@@ -598,8 +673,8 @@ window.templates.nextInQueueImage = _.template("
 
 window.templates.loadMoreImage = _.template("
 <div class='image bigimage recommender load-more'>
-    <div class='imageinfo normal spacer'></div>
     <div class='image_container thumb'>
+    <div class='image_container thumb load-more-inner'>
         <a>Load more</a>
     </div>
 </div>
@@ -612,8 +687,8 @@ window.templates.nextInQueueBar = _.template("
 ")
 
 window.templates.loadMoreBar = _.template("
-<div class='image bigimage recommender load-more load-more-bar'>
     <div>
+    <div class='load-more-inner'>
         <a>Load more</a>
     </div>
 </div>
@@ -734,6 +809,9 @@ $("head").append("
 .recommender .fave-span {
     color: #c4b246;
 }
+.recommender .fave-span:hover, .recommender .vote-up-span:hover {
+    color: white;
+}
 .recommender .fave-span-faved {
     display: inline!important;
     color: white!important;
@@ -753,6 +831,13 @@ $("head").append("
 .recommender .vote-down {
     color: #cf0001;
 }
+
+.recommender .vote-down-span-down-voted {
+    display: inline!important;
+    color: white!important;
+    background: #cf0001!important;
+}
+
 .recommender.load-more-bar.bigimage.image, .recommender.next-in-queue-bar.bigimage.image {
     width: 506px;
 }
