@@ -331,10 +331,10 @@ window.ImageView = Backbone.View.extend
         images = _.sortBy(data2images(image_data), (image) -> ids.indexOf(image.id))
         @recommendations = @recommendations.concat(images)
         @render()
-      ).fail ->
+      ).fail =>
         console.debug("Derpiboo.ru API failure")
         @renderFailure("Derpiboo.ru API failure")
-    ).fail ->
+    ).fail =>
       console.debug("Tiuku.me API failure")
       @renderFailure("Tiuku.me API failure")
 
@@ -775,9 +775,6 @@ videoModeStyles = "
 $("head").append("
 <style type='text/css'>
 
-.image-warning, #imagespns {
-    float: left;
-}
 .over-notify {
    border-radius: 5px;
    padding: 10px;
