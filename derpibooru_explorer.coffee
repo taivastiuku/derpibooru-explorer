@@ -132,7 +132,8 @@ window.Router = Backbone.Router.extend
     new QueueView({page: page, limit: @imagesPerPage or 21})
 
   thumbs:  ->
-    @imagesPerPage = $(".image").length if @imagesPerPage is null
+    @imagesPerPage = $(".image-thumb-box").length if @imagesPerPage is null
+    console.debug("Images per page: #{@imagesPerPage}")
 
     if window.location.hash
       @fakeNavigate()
@@ -140,22 +141,22 @@ window.Router = Backbone.Router.extend
     else
       new MetaBarView()
       console.debug "Add queue-button to thumbnails"
-      _.each $(".image.bigimage .imageinfo.normal"), (infoElement) ->
+      _.each $(".image-thumb-box.bigimage .imageinfo.normal"), (infoElement) ->
         new ThumbnailInfoView({el: infoElement, type: "big"})
 
-      _.each $(".image.normalimage .imageinfo.normal"), (infoElement) ->
+      _.each $(".image-thumb-box.normalimage .imageinfo.normal"), (infoElement) ->
         new ThumbnailInfoView({el: infoElement, type: "normal"})
 
   similarImages: (image_id) ->
     return if isNaN parseInt(image_id)
     console.debug "Add list of similar images"
 
-    target = $(".image_show_container")
-      .after(new ImageView(imageId: image_id).el)
+    target = $(".image-display")
+      .after($("<div class='image-similars'>").prepend(new ImageView(imageId: image_id).el))
 
     if app.config.VIDEO_MODE
       $("img#image_display").on "load", ->
-        height = $(".image_show_container").height()
+        height = $(".image-display").height()
         $("#imagelist_container.recommender").height(height - 3)
     else
         target.before("<hr>")
@@ -371,7 +372,7 @@ window.ImageView = Backbone.View.extend
 
 window.ThumbnailView = Backbone.View.extend
   tagName: "div"
-  className: "image bigimage recommender"
+  className: "image-thumb-box bigimage recommender"
 
   events:
     "click .add-queue": "queue"
@@ -393,7 +394,7 @@ window.ThumbnailView = Backbone.View.extend
       @renderDeleted()
     else if @image.duplicate_of isnt undefined
       @short_image = ""
-      @$el.html("<div class='image_container thumb'><a href='/#{@image.duplicate_of}'>Duplicate of #{@image.duplicate_of}</a></div>")
+      @$el.html("<div class='image-container thumb'><a href='/#{@image.duplicate_of}'>Duplicate of #{@image.duplicate_of}</a></div>")
     else
       @short_image = @image.image.replace(/__[a-z0-9+_-]+\./, ".")
       @render()
@@ -465,18 +466,18 @@ window.ThumbnailInfoView = Backbone.View.extend
   initialize: (options) ->
     @el = options.el
     @type = options.type
-    parent = @$el.parent()
-    @link = parent
+    imageContainer = @$el.parent().find(".image-container")
+    @link = imageContainer
       .attr("data-download-uri")
       .replace(/[/]download[/]/, "/view/")
       .replace(/__[a-z0-9+_-]+\./, ".")
     @image =
-      id: parent.attr("data-image-id")
+      id: imageContainer.attr("data-image-id")
       id_number: parseInt(@$el.find(".comments_link").attr("href").split("#")[0].slice(1))
-      tags: parent.attr("data-image-tag-aliases")
-      score: parent.attr("data-upvotes")
-      faves: parent.attr("data-faves")
-      representations: JSON.parse(parent.attr("data-uris"))
+      tags: imageContainer.attr("data-image-tag-aliases")
+      score: imageContainer.attr("data-upvotes")
+      faves: imageContainer.attr("data-faves")
+      representations: JSON.parse(imageContainer.attr("data-uris"))
       image: @link
 
     @render()
@@ -651,43 +652,43 @@ window.templates.thumbnail = _.template("
         <% } %>
     </span>
 </div>
-<div class='image_container thumb'><a href='/<%= image.id_number %>'><% if (image.isSpoilered()) { print(image.spoileredTags.join(', ')); } else { %><img src='<%= image.representations.thumb %>' /><% } %></a></div>
+<div class='image-container thumb'><a href='/<%= image.id_number %>'><% if (image.isSpoilered()) { print(image.spoileredTags.join(', ')); } else { %><img src='<%= image.representations.thumb %>' /><% } %></a></div>
 ")
 
 window.templates.thumbnailDeleted = _.template("
 <div class='imageinfo normal'>
     <span><%- image.id_number %></span>
 </div>
-<div class='image_container thumb'><span><%- image.deletion_reason %></span></div>
+<div class='image-container thumb'><span><%- image.deletion_reason %></span></div>
 ")
 
 
 window.templates.nextInQueueImage = _.template("
-<div class='image bigimage recommender next-in-queue'>
+<div class='image-thumb-box bigimage recommender next-in-queue'>
     <div class='imageinfo normal spacer'></div>
-    <div class='image_container thumb'>
+    <div class='image-container thumb'>
         <a>Next in queue <i class='fa fa-arrow-right'></i></a>
     </div>
 </div>
 ")
 
 window.templates.loadMoreImage = _.template("
-<div class='image bigimage recommender load-more'>
-    <div class='image_container thumb'>
-    <div class='image_container thumb load-more-inner'>
+<div class='image-thumb-box bigimage recommender load-more'>
+    <div class='imageinfo normal spacer'></div>
+    <div class='image-container thumb load-more-inner'>
         <a>Load more</a>
     </div>
 </div>
 ")
 
 window.templates.nextInQueueBar = _.template("
-<div class='image bigimage recommender next-in-queue next-in-queue-bar'>
+<div class='image-thumb-box bigimage recommender next-in-queue next-in-queue-bar'>
     <div><a>Next in queue <i class='fa fa-arrow-right'></i></a></div>
 </div>
 ")
 
 window.templates.loadMoreBar = _.template("
-    <div>
+<div>
     <div class='load-more-inner'>
         <a>Load more</a>
     </div>

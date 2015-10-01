@@ -2,7 +2,7 @@
 // @name       Derpibooru Explorer
 // @author     taivastiuku@gmail.com
 // @namespace  https://tiuku.me/
-// @version    1.4.1
+// @version    1.4.2
 
 // @description Add recommendations and UX enhancements to derpiboo.ru
 // @match      https://derpiboo.ru/*
@@ -15,7 +15,7 @@
 // @require    https://tiuku.me/static/lodash.underscore.min.js
 // @require    https://tiuku.me/static/backbone-min.js
 // @require    https://tiuku.me/static/keyboard.min.js
-// @require	   https://tiuku.me/static/derpibooru_explorer.js?1.4.1
+// @require	   https://tiuku.me/static/derpibooru_explorer.js?1.4.2
 // @grant      unsafeWindow
 // ==/UserScript==
 
@@ -74,6 +74,7 @@ window.runDerpibooruExplorer(config);
  *
  * Changelog
  * ---------
+ * v1.4.2  - Update changed css class names
  * v1.4.1  - Fix error some handling, layout of tag cloud
  * v1.4.0  - Enable voting from thumbnails, handle deleted similar images.
  *

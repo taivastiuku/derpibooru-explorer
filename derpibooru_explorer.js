@@ -156,20 +156,21 @@ window.Router = Backbone.Router.extend({
   },
   thumbs: function() {
     if (this.imagesPerPage === null) {
-      this.imagesPerPage = $(".image").length;
+      this.imagesPerPage = $(".image-thumb-box").length;
     }
+    console.debug("Images per page: " + this.imagesPerPage);
     if (window.location.hash) {
       return this.fakeNavigate();
     } else {
       new MetaBarView();
       console.debug("Add queue-button to thumbnails");
-      _.each($(".image.bigimage .imageinfo.normal"), function(infoElement) {
+      _.each($(".image-thumb-box.bigimage .imageinfo.normal"), function(infoElement) {
         return new ThumbnailInfoView({
           el: infoElement,
           type: "big"
         });
       });
-      return _.each($(".image.normalimage .imageinfo.normal"), function(infoElement) {
+      return _.each($(".image-thumb-box.normalimage .imageinfo.normal"), function(infoElement) {
         return new ThumbnailInfoView({
           el: infoElement,
           type: "normal"
@@ -183,13 +184,13 @@ window.Router = Backbone.Router.extend({
       return;
     }
     console.debug("Add list of similar images");
-    target = $(".image_show_container").after(new ImageView({
+    target = $(".image-display").after($("<div class='image-similars'>").prepend(new ImageView({
       imageId: image_id
-    }).el);
+    }).el));
     if (app.config.VIDEO_MODE) {
       $("img#image_display").on("load", function() {
         var height;
-        height = $(".image_show_container").height();
+        height = $(".image-display").height();
         return $("#imagelist_container.recommender").height(height - 3);
       });
     } else {
@@ -494,7 +495,7 @@ window.ImageView = Backbone.View.extend({
 
 window.ThumbnailView = Backbone.View.extend({
   tagName: "div",
-  className: "image bigimage recommender",
+  className: "image-thumb-box bigimage recommender",
   events: {
     "click .add-queue": "queue",
     "click .vote_up_link": "voteUp",
@@ -520,7 +521,7 @@ window.ThumbnailView = Backbone.View.extend({
       return this.renderDeleted();
     } else if (this.image.duplicate_of !== void 0) {
       this.short_image = "";
-      return this.$el.html("<div class='image_container thumb'><a href='/" + this.image.duplicate_of + "'>Duplicate of " + this.image.duplicate_of + "</a></div>");
+      return this.$el.html("<div class='image-container thumb'><a href='/" + this.image.duplicate_of + "'>Duplicate of " + this.image.duplicate_of + "</a></div>");
     } else {
       this.short_image = this.image.image.replace(/__[a-z0-9+_-]+\./, ".");
       return this.render();
@@ -609,18 +610,18 @@ window.ThumbnailView = Backbone.View.extend({
 
 window.ThumbnailInfoView = Backbone.View.extend({
   initialize: function(options) {
-    var parent;
+    var imageContainer;
     this.el = options.el;
     this.type = options.type;
-    parent = this.$el.parent();
-    this.link = parent.attr("data-download-uri").replace(/[\/]download[\/]/, "/view/").replace(/__[a-z0-9+_-]+\./, ".");
+    imageContainer = this.$el.parent().find(".image-container");
+    this.link = imageContainer.attr("data-download-uri").replace(/[\/]download[\/]/, "/view/").replace(/__[a-z0-9+_-]+\./, ".");
     this.image = {
-      id: parent.attr("data-image-id"),
+      id: imageContainer.attr("data-image-id"),
       id_number: parseInt(this.$el.find(".comments_link").attr("href").split("#")[0].slice(1)),
-      tags: parent.attr("data-image-tag-aliases"),
-      score: parent.attr("data-upvotes"),
-      faves: parent.attr("data-faves"),
-      representations: JSON.parse(parent.attr("data-uris")),
+      tags: imageContainer.attr("data-image-tag-aliases"),
+      score: imageContainer.attr("data-upvotes"),
+      faves: imageContainer.attr("data-faves"),
+      representations: JSON.parse(imageContainer.attr("data-uris")),
       image: this.link
     };
     return this.render();
@@ -826,15 +827,15 @@ Session = (function() {
 
 window.templates = {};
 
-window.templates.thumbnail = _.template("<div class='imageinfo normal'> <span> <a href='<%= short_image %>' class='id_number' title='<%- image.id_number %>'><i class='fa fa-image'></i><span class='hide-mobile'> <%- image.id_number %></span></a> <a class='fave_link' href='#'><span class='fave-span<% if (image.faved == true) {print('-faved');} %>'><i class='fa fa-star'></i> <span class='favourites'><%- image.faves %></span></span></a> <a class='vote_up_link' href='#'><span class='vote-up-span<% if (image.voted == 'up') {print('-up-voted');} %>'><i class='fa fa-arrow-up vote-up'></i></span></a> <span class='score'><%- image.score %></span> <a class='vote_down_link' href='#'><span class='vote-down-span<% if (image.voted == 'down') {print('-down-voted');} %>'><i class='fa fa-arrow-down' title='neigh'></i></a> <a href='/<%= image.id_number %>#comments' class='comments_link'><i class='fa fa-comments'></i></a> <% if (image.isQueued()) { %> <span class='add-queue queued'%><a><i class='fa fa-plus-square'></i><span class='hide-mobile'> in queue</span></a></span> <% } else { %> <span class='add-queue'><a><i class='fa fa-plus-square'></i><span class='hide-mobile'> queue</span></a></span> <% } %> </span> </div> <div class='image_container thumb'><a href='/<%= image.id_number %>'><% if (image.isSpoilered()) { print(image.spoileredTags.join(', ')); } else { %><img src='<%= image.representations.thumb %>' /><% } %></a></div>");
+window.templates.thumbnail = _.template("<div class='imageinfo normal'> <span> <a href='<%= short_image %>' class='id_number' title='<%- image.id_number %>'><i class='fa fa-image'></i><span class='hide-mobile'> <%- image.id_number %></span></a> <a class='fave_link' href='#'><span class='fave-span<% if (image.faved == true) {print('-faved');} %>'><i class='fa fa-star'></i> <span class='favourites'><%- image.faves %></span></span></a> <a class='vote_up_link' href='#'><span class='vote-up-span<% if (image.voted == 'up') {print('-up-voted');} %>'><i class='fa fa-arrow-up vote-up'></i></span></a> <span class='score'><%- image.score %></span> <a class='vote_down_link' href='#'><span class='vote-down-span<% if (image.voted == 'down') {print('-down-voted');} %>'><i class='fa fa-arrow-down' title='neigh'></i></a> <a href='/<%= image.id_number %>#comments' class='comments_link'><i class='fa fa-comments'></i></a> <% if (image.isQueued()) { %> <span class='add-queue queued'%><a><i class='fa fa-plus-square'></i><span class='hide-mobile'> in queue</span></a></span> <% } else { %> <span class='add-queue'><a><i class='fa fa-plus-square'></i><span class='hide-mobile'> queue</span></a></span> <% } %> </span> </div> <div class='image-container thumb'><a href='/<%= image.id_number %>'><% if (image.isSpoilered()) { print(image.spoileredTags.join(', ')); } else { %><img src='<%= image.representations.thumb %>' /><% } %></a></div>");
 
-window.templates.thumbnailDeleted = _.template("<div class='imageinfo normal'> <span><%- image.id_number %></span> </div> <div class='image_container thumb'><span><%- image.deletion_reason %></span></div>");
+window.templates.thumbnailDeleted = _.template("<div class='imageinfo normal'> <span><%- image.id_number %></span> </div> <div class='image-container thumb'><span><%- image.deletion_reason %></span></div>");
 
-window.templates.nextInQueueImage = _.template("<div class='image bigimage recommender next-in-queue'> <div class='imageinfo normal spacer'></div> <div class='image_container thumb'> <a>Next in queue <i class='fa fa-arrow-right'></i></a> </div> </div>");
+window.templates.nextInQueueImage = _.template("<div class='image-thumb-box bigimage recommender next-in-queue'> <div class='imageinfo normal spacer'></div> <div class='image-container thumb'> <a>Next in queue <i class='fa fa-arrow-right'></i></a> </div> </div>");
 
-window.templates.loadMoreImage = _.template("<div class='image bigimage recommender load-more'> <div class='image_container thumb'> <div class='image_container thumb load-more-inner'> <a>Load more</a> </div> </div>");
+window.templates.loadMoreImage = _.template("<div class='image-thumb-box bigimage recommender load-more'> <div class='imageinfo normal spacer'></div> <div class='image-container thumb load-more-inner'> <a>Load more</a> </div> </div>");
 
-window.templates.nextInQueueBar = _.template("<div class='image bigimage recommender next-in-queue next-in-queue-bar'> <div><a>Next in queue <i class='fa fa-arrow-right'></i></a></div> </div>");
+window.templates.nextInQueueBar = _.template("<div class='image-thumb-box bigimage recommender next-in-queue next-in-queue-bar'> <div><a>Next in queue <i class='fa fa-arrow-right'></i></a></div> </div>");
 
 window.templates.loadMoreBar = _.template("<div> <div class='load-more-inner'> <a>Load more</a> </div> </div>");
 
