@@ -2,7 +2,7 @@
 // @name       Derpibooru Explorer
 // @author     taivastiuku@gmail.com
 // @namespace  https://tiuku.me/
-// @version    1.4.2
+// @version    1.5.0
 
 // @description Add recommendations and UX enhancements to derpiboo.ru
 // @match      https://derpiboo.ru/*
@@ -15,7 +15,7 @@
 // @require    https://tiuku.me/static/lodash.underscore.min.js
 // @require    https://tiuku.me/static/backbone-min.js
 // @require    https://tiuku.me/static/keyboard.min.js
-// @require	   https://tiuku.me/static/derpibooru_explorer.js?1.4.2
+// @require	   https://tiuku.me/static/derpibooru_explorer.js?1.5.0
 // @grant      unsafeWindow
 // ==/UserScript==
 
@@ -74,6 +74,10 @@ window.runDerpibooruExplorer(config);
  *
  * Changelog
  * ---------
+ * v1.5.0  - POST image data if no recommendations can be made with cached data
+ *           This allows making recommendations if there are 24 or more tags
+ *           and faves combined.
+ *
  * v1.4.2  - Update changed css class names
  * v1.4.1  - Fix error some handling, layout of tag cloud
  * v1.4.0  - Enable voting from thumbnails, handle deleted similar images.

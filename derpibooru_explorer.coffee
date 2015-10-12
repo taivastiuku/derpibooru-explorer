@@ -276,6 +276,7 @@ window.ImageView = Backbone.View.extend
   id: "imagelist_container"
   className: "recommender"
   initialize: (options) ->
+    @isKnownImage = true
     @offset = 0
     @recommendations = []
     @image =
@@ -319,25 +320,50 @@ window.ImageView = Backbone.View.extend
 
   loadMore: (event) ->
     $(event.target).remove()
-
     @offset += 8
     @load()
 
   load: ->
     console.debug("Loading recommendations for #{@image.id_number}")
-    $.get("https://tiuku.me/api/for-image/#{@image.id_number}?session=#{app.session.id}&offset=#{@offset}", (data) =>
-      console.debug("Got recommendations")
-      ids = _.filter _.map(data.recommendations, (item) -> item.id), (id) -> id isnt null
-      $.get("/api/v2/images/show/?ids=#{ids.join()}", (image_data) =>
-        images = _.sortBy(data2images(image_data), (image) -> ids.indexOf(image.id))
-        @recommendations = @recommendations.concat(images)
-        @render()
+
+    if @isKnownImage
+      tiukuAPI = "https://tiuku.me/api/for-image/#{@image.id_number}?session=#{app.session.id}&offset=#{@offset}"
+      $.get(tiukuAPI, (data) =>
+        ids = _.filter _.map(data.recommendations, (item) -> item.id), (id) -> id isnt null
+        if ids.length > 0 or @offset != 0
+          @_tiukuSuccessLoad(ids)
+        else
+          @isKnownImage = false
+          @load()
       ).fail =>
-        console.debug("Derpiboo.ru API failure")
-        @renderFailure("Derpiboo.ru API failure")
+        console.debug("Tiuku.me API failure")
+        @renderFailure("Tiuku.me API failure")
+    else
+      tags = _.map $(".tag-list .tag"), (element) -> $(element).attr("data-tag-name")
+      faves =  _.map $(".interaction-user-list-item"), (element) -> element.text
+
+      if tags.length + faves.length < 24
+        return @render()
+
+      tiukuAPI = "https://tiuku.me/api/tags/image/?session=#{app.session.id}&offset=#{@offset}"
+      data =
+        tags: tags.join()
+        faves: faves.join()
+      $.post(tiukuAPI, data, (data) =>
+        ids = _.filter _.map(data.recommendations, (item) -> item.id), (id) -> id isnt null
+        @_tiukuSuccessLoad(ids)
+      ).fail =>
+        console.debug("Tiuku.me API failure")
+        @renderFailure("Tiuku.me API failure")
+
+  _tiukuSuccessLoad: (ids) ->
+    $.get("/api/v2/images/show/?ids=#{ids.join()}", (image_data) =>
+      images = _.sortBy(data2images(image_data), (image) -> ids.indexOf(image.id))
+      @recommendations = @recommendations.concat(images)
+      @render()
     ).fail =>
-      console.debug("Tiuku.me API failure")
-      @renderFailure("Tiuku.me API failure")
+      console.debug("Derpiboo.ru API failure")
+      @renderFailure("Derpiboo.ru API failure")
 
   renderFailure: (msg) ->
     console.debug("Rendering failure message")

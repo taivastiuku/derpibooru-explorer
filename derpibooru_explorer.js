@@ -354,6 +354,7 @@ window.ImageView = Backbone.View.extend({
   id: "imagelist_container",
   className: "recommender",
   initialize: function(options) {
+    this.isKnownImage = true;
     this.offset = 0;
     this.recommendations = [];
     this.image = {
@@ -427,32 +428,78 @@ window.ImageView = Backbone.View.extend({
     return this.load();
   },
   load: function() {
+    var data, faves, tags, tiukuAPI;
     console.debug("Loading recommendations for " + this.image.id_number);
-    return $.get("https://tiuku.me/api/for-image/" + this.image.id_number + "?session=" + app.session.id + "&offset=" + this.offset, (function(_this) {
-      return function(data) {
-        var ids;
-        console.debug("Got recommendations");
-        ids = _.filter(_.map(data.recommendations, function(item) {
-          return item.id;
-        }), function(id) {
-          return id !== null;
-        });
-        return $.get("/api/v2/images/show/?ids=" + (ids.join()), function(image_data) {
-          var images;
-          images = _.sortBy(data2images(image_data), function(image) {
-            return ids.indexOf(image.id);
+    if (this.isKnownImage) {
+      tiukuAPI = "https://tiuku.me/api/for-image/" + this.image.id_number + "?session=" + app.session.id + "&offset=" + this.offset;
+      return $.get(tiukuAPI, (function(_this) {
+        return function(data) {
+          var ids;
+          ids = _.filter(_.map(data.recommendations, function(item) {
+            return item.id;
+          }), function(id) {
+            return id !== null;
           });
-          _this.recommendations = _this.recommendations.concat(images);
-          return _this.render();
-        }).fail(function() {
-          console.debug("Derpiboo.ru API failure");
-          return _this.renderFailure("Derpiboo.ru API failure");
+          if (ids.length > 0 || _this.offset !== 0) {
+            return _this._tiukuSuccessLoad(ids);
+          } else {
+            _this.isKnownImage = false;
+            return _this.load();
+          }
+        };
+      })(this)).fail((function(_this) {
+        return function() {
+          console.debug("Tiuku.me API failure");
+          return _this.renderFailure("Tiuku.me API failure");
+        };
+      })(this));
+    } else {
+      tags = _.map($(".tag-list .tag"), function(element) {
+        return $(element).attr("data-tag-name");
+      });
+      faves = _.map($(".interaction-user-list-item"), function(element) {
+        return element.text;
+      });
+      if (tags.length + faves.length < 24) {
+        return this.render();
+      }
+      tiukuAPI = "https://tiuku.me/api/tags/image/?session=" + app.session.id + "&offset=" + this.offset;
+      data = {
+        tags: tags.join(),
+        faves: faves.join()
+      };
+      return $.post(tiukuAPI, data, (function(_this) {
+        return function(data) {
+          var ids;
+          ids = _.filter(_.map(data.recommendations, function(item) {
+            return item.id;
+          }), function(id) {
+            return id !== null;
+          });
+          return _this._tiukuSuccessLoad(ids);
+        };
+      })(this)).fail((function(_this) {
+        return function() {
+          console.debug("Tiuku.me API failure");
+          return _this.renderFailure("Tiuku.me API failure");
+        };
+      })(this));
+    }
+  },
+  _tiukuSuccessLoad: function(ids) {
+    return $.get("/api/v2/images/show/?ids=" + (ids.join()), (function(_this) {
+      return function(image_data) {
+        var images;
+        images = _.sortBy(data2images(image_data), function(image) {
+          return ids.indexOf(image.id);
         });
+        _this.recommendations = _this.recommendations.concat(images);
+        return _this.render();
       };
     })(this)).fail((function(_this) {
       return function() {
-        console.debug("Tiuku.me API failure");
-        return _this.renderFailure("Tiuku.me API failure");
+        console.debug("Derpiboo.ru API failure");
+        return _this.renderFailure("Derpiboo.ru API failure");
       };
     })(this));
   },
