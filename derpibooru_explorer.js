@@ -107,6 +107,7 @@ window.Router = Backbone.Router.extend({
     "images/page/": null,
     "images/page/:page": "thumbs",
     "lists/:type": "thumbs",
+    "related/:id": "thumbs",
     "images/:image_id": "similarImages",
     ":image_id": "similarImages",
     "art/*path": "forum",
@@ -253,13 +254,11 @@ window.QueueView = Backbone.View.extend({
     };
     this.$el.append(templates.queueMetabar(meta));
     queue = this.queue.slice(this.page * this.limit, (this.page + 1) * this.limit);
-    console.log(queue);
     if (queue.length > 0) {
       return $.get("https://derpiboo.ru/search.json?q=id_number%3A" + (queue.join("+||+id_number%3A")), (function(_this) {
         return function(image_data) {
           var images;
           images = _.sortBy(data2images(image_data), function(image) {
-            console.log([image.id_number, queue.indexOf(image.id_number)]);
             return queue.indexOf(image.id_number);
           });
           _.each(images, function(image) {

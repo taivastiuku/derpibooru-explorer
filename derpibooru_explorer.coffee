@@ -88,6 +88,7 @@ window.Router = Backbone.Router.extend
     "images/page/": null  # I need pictures, pictures of ponies
     "images/page/:page": "thumbs"
     "lists/:type": "thumbs"
+    "related/:id": "thumbs"
 
     "images/:image_id": "similarImages"
     ":image_id": "similarImages"
@@ -209,11 +210,9 @@ window.QueueView = Backbone.View.extend
     @$el.append(templates.queueMetabar(meta))
 
     queue = @queue.slice(@page * @limit, (@page + 1) * @limit)
-    console.log(queue)
     if queue.length > 0
       $.get("https://derpiboo.ru/search.json?q=id_number%3A#{queue.join("+||+id_number%3A")}", (image_data) =>
         images = _.sortBy data2images(image_data), (image) ->
-          console.log([image.id_number, queue.indexOf(image.id_number)])
           queue.indexOf(image.id_number)
         _.each images, (image) =>
           @$el.append new ThumbnailView(image: image).el
