@@ -42,21 +42,20 @@ data2images = function(image_data) {
   interactions = {};
   _.each(raw_interactions, function(i) {
     var obj;
-    obj = interactions[i.interactable_id] || {};
+    obj = interactions["" + i.image_id] || {};
     if (i.interaction_type === "faved") {
       obj.faved = true;
     } else if (i.interaction_type === "voted") {
       obj.voted = i.value;
     }
-    return interactions[i.interactable_id] = obj;
+    return interactions["" + i.image_id] = obj;
   });
   _.each(images, function(image) {
     var interaction;
-    if (image.tags) {
-      image.tags = image.tags.split(", ");
-    } else {
-      image.tags = [];
-    }
+    image.tags = image.tags ? image.tags.split(", ") : [];
+    image.tag_ids = image.tag_ids ? _.map(image.tag_ids, function(tag_id) {
+      return parseInt(tag_id);
+    }) : [];
     interaction = interactions[image.id];
     if (interaction) {
       return _.extend(image, interaction);
@@ -331,7 +330,7 @@ window.HighlightsView = Backbone.View.extend({
     _.each(this.highlights, (function(_this) {
       return function(item) {
         var hiddenTags;
-        hiddenTags = _.intersection(item.tags, booru.hiddenTagList);
+        hiddenTags = _.intersection(item.tag_ids, booru.hiddenTagList);
         if (hiddenTags.length <= 0) {
           return _this.$el.append(new ThumbnailView({
             image: item
@@ -517,7 +516,7 @@ window.ImageView = Backbone.View.extend({
       _.each(this.recommendations, (function(_this) {
         return function(item) {
           var hiddenTags;
-          hiddenTags = _.intersection(item.tags, booru.hiddenTagList);
+          hiddenTags = _.intersection(item.tag_ids, booru.hiddenTagList);
           if (hiddenTags.length <= 0) {
             _this.$el.append(new ThumbnailView({
               image: item
@@ -551,7 +550,7 @@ window.ThumbnailView = Backbone.View.extend({
   initialize: function(options) {
     var spoileredTags;
     this.image = options.image;
-    spoileredTags = _.intersection(this.image.tags, booru.spoileredTagList);
+    spoileredTags = _.intersection(this.image.tag_ids, booru.spoileredTagList);
     _.extend(this.image, {
       spoileredTags: spoileredTags,
       isSpoilered: function() {
@@ -873,7 +872,7 @@ Session = (function() {
 
 window.templates = {};
 
-window.templates.thumbnail = _.template("<div class='imageinfo normal'> <span> <a href='<%= short_image %>' class='id_number' title='<%- image.id_number %>'><i class='fa fa-image'></i><span class='hide-mobile'> <%- image.id_number %></span></a> <a class='fave_link' href='#'><span class='fave-span<% if (image.faved == true) {print('-faved');} %>'><i class='fa fa-star'></i> <span class='favourites'><%- image.faves %></span></span></a> <a class='vote_up_link' href='#'><span class='vote-up-span<% if (image.voted == 'up') {print('-up-voted');} %>'><i class='fa fa-arrow-up vote-up'></i></span></a> <span class='score'><%- image.score %></span> <a class='vote_down_link' href='#'><span class='vote-down-span<% if (image.voted == 'down') {print('-down-voted');} %>'><i class='fa fa-arrow-down' title='neigh'></i></a> <a href='/<%= image.id_number %>#comments' class='comments_link'><i class='fa fa-comments'></i></a> <% if (image.isQueued()) { %> <span class='add-queue queued'%><a><i class='fa fa-plus-square'></i><span class='hide-mobile'> in queue</span></a></span> <% } else { %> <span class='add-queue'><a><i class='fa fa-plus-square'></i><span class='hide-mobile'> queue</span></a></span> <% } %> </span> </div> <div class='image-container thumb'><a href='/<%= image.id_number %>'><% if (image.isSpoilered()) { print(image.spoileredTags.join(', ')); } else { %><img src='<%= image.representations.thumb %>' /><% } %></a></div>");
+window.templates.thumbnail = _.template("<div class='imageinfo normal'> <span> <a href='<%= short_image %>' class='id_number' title='<%- image.id_number %>'><i class='fa fa-image'></i><span class='hide-mobile'> <%- image.id_number %></span></a> <a class='fave_link' href='#'><span class='fave-span<% if (image.faved == true) {print('-faved');} %>'><i class='fa fa-star'></i> <span class='favourites'><%- image.faves %></span></span></a> <a class='vote_up_link' href='#'><span class='vote-up-span<% if (image.voted == 'up') {print('-up-voted');} %>'><i class='fa fa-arrow-up vote-up'></i></span></a> <span class='score'><%- image.score %></span> <a class='vote_down_link' href='#'><span class='vote-down-span<% if (image.voted == 'down') {print('-down-voted');} %>'><i class='fa fa-arrow-down' title='neigh'></i></a> <a href='/<%= image.id_number %>#comments' class='comments_link'><i class='fa fa-comments'></i></a> <% if (image.isQueued()) { %> <span class='add-queue queued'%><a><i class='fa fa-plus-square'></i><span class='hide-mobile'> in queue</span></a></span> <% } else { %> <span class='add-queue'><a><i class='fa fa-plus-square'></i><span class='hide-mobile'> queue</span></a></span> <% } %> </span> </div> <div class='image-container thumb'><a href='/<%= image.id_number %>'><% if (image.isSpoilered()) { print(image.tags.join(', ')); } else { %><img src='<%= image.representations.thumb %>' /><% } %></a></div>");
 
 window.templates.thumbnailDeleted = _.template("<div class='imageinfo normal'> <span><%- image.id_number %></span> </div> <div class='image-container thumb'><span><%- image.deletion_reason %></span></div>");
 

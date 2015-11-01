@@ -32,18 +32,17 @@ data2images = (image_data) ->
   raw_interactions = image_data.interactions
   interactions = {}
   _.each raw_interactions, (i) ->
-    obj = interactions[i.interactable_id] or {}
+    obj = interactions["#{i.image_id}"] or {}
     if i.interaction_type == "faved"
       obj.faved = true
     else if i.interaction_type == "voted"
       obj.voted = i.value
-    interactions[i.interactable_id] = obj
+    interactions["#{i.image_id}"] = obj
 
   _.each images, (image) ->
-    if image.tags
-      image.tags = image.tags.split(", ")
-    else
-      image.tags = []
+    image.tags = if image.tags then image.tags.split(", ") else []
+    image.tag_ids = if image.tag_ids then _.map(image.tag_ids, (tag_id) -> parseInt(tag_id)) else []
+
     interaction = interactions[image.id]
     _.extend(image, interaction) if interaction
   return images
@@ -259,7 +258,7 @@ window.HighlightsView = Backbone.View.extend
   render: ->
     @$el.html("<div class='metabar'><div class='metasection'><strong>Highlighted images for #{@user}</srong></div></div>")
     _.each @highlights, (item) =>
-      hiddenTags = _.intersection(item.tags, booru.hiddenTagList)
+      hiddenTags = _.intersection(item.tag_ids, booru.hiddenTagList)
       if hiddenTags.length <= 0
         @$el.append new ThumbnailView(image: item).el
     @$el.append(templates.loadMoreImage())
@@ -379,7 +378,7 @@ window.ImageView = Backbone.View.extend
     else
       console.debug("Rendering thumbnails")
       _.each @recommendations, (item) =>
-        hiddenTags = _.intersection(item.tags, booru.hiddenTagList)
+        hiddenTags = _.intersection(item.tag_ids, booru.hiddenTagList)
         if hiddenTags.length <= 0
           @$el.append new ThumbnailView(image: item).el
           @$el.append(" ")
@@ -407,7 +406,7 @@ window.ThumbnailView = Backbone.View.extend
 
   initialize: (options) ->
     @image = options.image
-    spoileredTags = _.intersection(@image.tags, booru.spoileredTagList)
+    spoileredTags = _.intersection(@image.tag_ids, booru.spoileredTagList)
     # TODO Recommendation = Backbone.Model.extend ...
     _.extend @image,
       spoileredTags: spoileredTags
@@ -677,7 +676,7 @@ window.templates.thumbnail = _.template("
         <% } %>
     </span>
 </div>
-<div class='image-container thumb'><a href='/<%= image.id_number %>'><% if (image.isSpoilered()) { print(image.spoileredTags.join(', ')); } else { %><img src='<%= image.representations.thumb %>' /><% } %></a></div>
+<div class='image-container thumb'><a href='/<%= image.id_number %>'><% if (image.isSpoilered()) { print(image.tags.join(', ')); } else { %><img src='<%= image.representations.thumb %>' /><% } %></a></div>
 ")
 
 window.templates.thumbnailDeleted = _.template("
