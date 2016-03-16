@@ -57,7 +57,7 @@ window.Router = Backbone.Router.extend
     @imagesPerPage = null
 
     path = if window.location.pathname == "/images/" then "/images" else "/images/"
-    $($(".dropdown_menu")[0]).append("<a href='#{path}#highlights'><i class='fa fa-fw fa-birthday-cake'></i> Highlights</a> <a href='#{path}#queue'><i class='fa fa-cloud-download'></i> Queue</a>")
+    $($(".dropdown__content")[0]).append("<a href='#{path}#highlights'><i class='fa fa-fw fa-birthday-cake'></i> Highlights</a> <a href='#{path}#queue'><i class='fa fa-cloud-download'></i> Queue</a>")
 
     KeyboardJS.on "e", =>
       console.debug "Next in queue"
@@ -908,7 +908,7 @@ $("head").append("
     color: gold;
     cursor: help;
 }
-.highlights .image.recommender, .queue-list .image.recommender {
+.highlights .bigimage.recommender, .queue-list .bigimage.recommender {
     margin-left: 5px;
 }
 
