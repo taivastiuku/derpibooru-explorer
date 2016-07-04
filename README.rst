@@ -15,6 +15,28 @@ TOC
 
 Changelog
 ---------
+v1.5.4  - Fix for recent derpibooru API change
+
+v1.5.3  - Fix for changed derpibooru styling
+
+v1.5.2  - Handle changes in interactions API and window.booru
+
+v1.5.1  - Add queue navigation to native /related/ list
+
+v1.5.0  - POST image data if no recommendations can be made with cached data. This allows making recommendations if there are 24 or more tags and faves combined.
+
+v1.4.2  - Update changed css class names
+
+v1.4.1  - Fix error some handling, layout of tag cloud
+
+v1.4.0  - Enable voting from thumbnails, handle deleted similar images.
+
+v1.3.1  - Don't hardcode the derpiboo.ru domain.
+
+v1.3.0  - Refactor how APIs are used, paginated queue view.
+
+v1.2.1  - Use derpibooru api to fetch fave and vote info for recommendation thumbnails. Removed stars altogether.
+
 v1.2.0  - Add view for inspecting current queue.
 
 v1.1.7  - Add thumbnail enhancements to /lists/:splat urls and "Queue All" button to imagelists.

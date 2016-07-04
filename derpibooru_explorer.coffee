@@ -210,9 +210,9 @@ window.QueueView = Backbone.View.extend
 
     queue = @queue.slice(@page * @limit, (@page + 1) * @limit)
     if queue.length > 0
-      $.get("https://derpiboo.ru/search.json?q=id_number%3A#{queue.join("+||+id_number%3A")}", (image_data) =>
+      $.get("https://derpiboo.ru/search.json?q=id%3A#{queue.join("+||+id%3A")}", (image_data) =>
         images = _.sortBy data2images(image_data), (image) ->
-          queue.indexOf(image.id_number)
+          queue.indexOf(image.id)
         _.each images, (image) =>
           @$el.append new ThumbnailView(image: image).el
         meta.light = true
@@ -265,7 +265,7 @@ window.HighlightsView = Backbone.View.extend
 
   loadMore: (event) ->
     $(event.target).remove()
-    @offset = if @highlights.length > 0 then @highlights.slice(-1)[0]["id_number"] else 0
+    @offset = if @highlights.length > 0 then @highlights.slice(-1)[0]["id"] else 0
     @load()
 
 
@@ -278,7 +278,7 @@ window.ImageView = Backbone.View.extend
     @offset = 0
     @recommendations = []
     @image =
-      id_number: options.imageId
+      id: options.imageId
       is_faved: -> $(".fave_link.faved").length > 0
       is_upvoted: -> $(".vote_up_link.voted_up").length > 0
       is_downvoted: -> $(".vote_down_link.voted_down").length > 0
@@ -322,10 +322,10 @@ window.ImageView = Backbone.View.extend
     @load()
 
   load: ->
-    console.debug("Loading recommendations for #{@image.id_number}")
+    console.debug("Loading recommendations for #{@image.id}")
 
     if @isKnownImage
-      tiukuAPI = "https://tiuku.me/api/for-image/#{@image.id_number}?session=#{app.session.id}&offset=#{@offset}"
+      tiukuAPI = "https://tiuku.me/api/for-image/#{@image.id}?session=#{app.session.id}&offset=#{@offset}"
       $.get(tiukuAPI, (data) =>
         ids = _.filter _.map(data.recommendations, (item) -> item.id), (id) -> id isnt null
         if ids.length > 0 or @offset != 0
@@ -412,7 +412,7 @@ window.ThumbnailView = Backbone.View.extend
       spoileredTags: spoileredTags
       # isFaved: => _.contains(@image.tags, "faved_by:#{app.session.user}")
       isSpoilered: -> spoileredTags.length > 0
-      isQueued: => app.imageQueue.contains(@image.id_number)
+      isQueued: => app.imageQueue.contains(@image.id)
 
     if @image.deletion_reason isnt undefined
       @renderDeleted()
@@ -435,8 +435,8 @@ window.ThumbnailView = Backbone.View.extend
     @$el.append(" ")
 
   queue: ->
-    console.debug("Queuing #{@image.id_number}")
-    app.imageQueue.toggle(@image.id_number)
+    console.debug("Queuing #{@image.id}")
+    app.imageQueue.toggle(@image.id)
     @render()
 
   fave: (event) ->
@@ -497,7 +497,7 @@ window.ThumbnailInfoView = Backbone.View.extend
       .replace(/__[a-z0-9+_-]+\./, ".")
     @image =
       id: imageContainer.attr("data-image-id")
-      id_number: parseInt(@$el.find(".comments_link").attr("href").split("#")[0].slice(1))
+      id: parseInt(@$el.find(".comments_link").attr("href").split("#")[0].slice(1))
       tags: imageContainer.attr("data-image-tag-aliases")
       score: imageContainer.attr("data-upvotes")
       faves: imageContainer.attr("data-faves")
@@ -512,25 +512,25 @@ window.ThumbnailInfoView = Backbone.View.extend
   render: ->
     @remove() if _.isEmpty(@image)
     @$el.find(".add-queue").remove()
-    @$el.find(".id_number").remove()
+    @$el.find(".id").remove()
 
     if @type == "big"
-      @$el.prepend("<a href='#{@link}' class='id_number' title='#{@image.id_number}'><i class='fa fa-image'></i><span class='hide-mobile'> #{@image.id_number}</span></a>")
-      if app.imageQueue.contains(@image.id_number)
+      @$el.prepend("<a href='#{@link}' class='id' title='#{@image.id}'><i class='fa fa-image'></i><span class='hide-mobile'> #{@image.id}</span></a>")
+      if app.imageQueue.contains(@image.id)
         @$el.append("<span class='add-queue queued'%><a><i class='fa fa-plus-square'></i><span class='hide-mobile'> in queue</span></a></span>")
       else
         @$el.append("<span class='add-queue'><a><i class='fa fa-plus-square'></i><span class='hide-mobile'> Queue</span></a></span>")
 
     else if @type == "normal"
-      @$el.prepend("<a href='#{@link}' class='id_number' title='#{@image.id_number}'><i class='fa fa-image'></i></a>")
-      if app.imageQueue.contains(@image.id_number)
+      @$el.prepend("<a href='#{@link}' class='id' title='#{@image.id}'><i class='fa fa-image'></i></a>")
+      if app.imageQueue.contains(@image.id)
         @$el.append("<span class='add-queue queued'%><a><i class='fa fa-plus-square'></i></a></span>")
       else
         @$el.append("<span class='add-queue'><a><i class='fa fa-plus-square'></i></a></span>")
 
   queue: ->
-    console.debug("Queuing #{@image.id_number}")
-    app.imageQueue.toggle(@image.id_number)
+    console.debug("Queuing #{@image.id}")
+    app.imageQueue.toggle(@image.id)
     @render()
 
 
@@ -662,12 +662,12 @@ window.templates = {}
 window.templates.thumbnail = _.template("
 <div class='imageinfo normal'>
     <span>
-        <a href='<%= short_image %>' class='id_number' title='<%- image.id_number %>'><i class='fa fa-image'></i><span class='hide-mobile'> <%- image.id_number %></span></a>
+        <a href='<%= short_image %>' class='id' title='<%- image.id %>'><i class='fa fa-image'></i><span class='hide-mobile'> <%- image.id %></span></a>
         <a class='fave_link' href='#'><span class='fave-span<% if (image.faved == true) {print('-faved');} %>'><i class='fa fa-star'></i> <span class='favourites'><%- image.faves %></span></span></a>
         <a class='vote_up_link' href='#'><span class='vote-up-span<% if (image.voted == 'up') {print('-up-voted');} %>'><i class='fa fa-arrow-up vote-up'></i></span></a>
         <span class='score'><%- image.score %></span>
         <a class='vote_down_link' href='#'><span class='vote-down-span<% if (image.voted == 'down') {print('-down-voted');} %>'><i class='fa fa-arrow-down' title='neigh'></i></a>
-        <a href='/<%= image.id_number %>#comments' class='comments_link'><i class='fa fa-comments'></i></a>
+        <a href='/<%= image.id %>#comments' class='comments_link'><i class='fa fa-comments'></i></a>
 
         <% if (image.isQueued()) { %>
         <span class='add-queue queued'%><a><i class='fa fa-plus-square'></i><span class='hide-mobile'> in queue</span></a></span>
@@ -676,12 +676,12 @@ window.templates.thumbnail = _.template("
         <% } %>
     </span>
 </div>
-<div class='image-container thumb'><a href='/<%= image.id_number %>'><% if (image.isSpoilered()) { print(image.tags.join(', ')); } else { %><img src='<%= image.representations.thumb %>' /><% } %></a></div>
+<div class='image-container thumb'><a href='/<%= image.id %>'><% if (image.isSpoilered()) { print(image.tags.join(', ')); } else { %><img src='<%= image.representations.thumb %>' /><% } %></a></div>
 ")
 
 window.templates.thumbnailDeleted = _.template("
 <div class='imageinfo normal'>
-    <span><%- image.id_number %></span>
+    <span><%- image.id %></span>
 </div>
 <div class='image-container thumb'><span><%- image.deletion_reason %></span></div>
 ")
@@ -878,12 +878,12 @@ $("head").append("
 .imageinfo.normal.spacer {
     height: 12px;
 }
-.id_number {
+.id {
     margin-right: 2px;
     padding-left: 2px;
     padding-right: 2px;
 }
-.id_number:hover {
+.id:hover {
     color: white;
     background: #57a4db;
 }

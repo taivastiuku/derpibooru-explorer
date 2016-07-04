@@ -2,7 +2,7 @@
 // @name       Derpibooru Explorer
 // @author     taivastiuku@gmail.com
 // @namespace  https://tiuku.me/
-// @version    1.5.3
+// @version    1.5.4
 
 // @description Add recommendations and UX enhancements to derpiboo.ru
 // @match      https://derpiboo.ru/*
@@ -15,7 +15,7 @@
 // @require    https://tiuku.me/static/lodash.underscore.min.js
 // @require    https://tiuku.me/static/backbone-min.js
 // @require    https://tiuku.me/static/keyboard.min.js
-// @require	   https://tiuku.me/static/derpibooru_explorer.js?1.5.3
+// @require	   https://tiuku.me/static/derpibooru_explorer.js?1.5.4
 // @grant      unsafeWindow
 // ==/UserScript==
 
@@ -74,6 +74,7 @@ window.runDerpibooruExplorer(config);
  *
  * Changelog
  * ---------
+ * v1.5.4  - Fix for recent derpibooru API change
  * v1.5.3  - Fix for changed derpibooru styling
  * v1.5.2  - Handle changes in interactions API and window.booru
  * v1.5.1  - Add queue navigation to native /related/ list
