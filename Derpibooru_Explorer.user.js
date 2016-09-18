@@ -2,7 +2,7 @@
 // @name       Derpibooru Explorer
 // @author     taivastiuku@gmail.com
 // @namespace  https://tiuku.me/
-// @version    1.5.4.2
+// @version    1.6.0
 
 // @description Add recommendations and UX enhancements to derpiboo.ru
 // @match      https://derpiboo.ru/*
@@ -15,7 +15,7 @@
 // @require    https://tiuku.me/static/underscore-min.js
 // @require    https://tiuku.me/static/backbone-min.js
 // @require    https://tiuku.me/static/keyboard.min.js
-// @require	   https://tiuku.me/derpibooru_explorer.js?1.5.5
+// @require	   https://tiuku.me/derpibooru_explorer.js?1.6.0
 // @connect    tiuku.me
 // @grant      GM_xmlhttpRequest
 // @grant      unsafeWindow
