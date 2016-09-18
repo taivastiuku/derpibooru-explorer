@@ -15,7 +15,7 @@
 // @require    https://tiuku.me/static/underscore-min.js
 // @require    https://tiuku.me/static/backbone-min.js
 // @require    https://tiuku.me/static/keyboard.min.js
-// @require	   https://tiuku.me/derpibooru_explorer.js?1.6.0
+// @require	   https://tiuku.me/static/derpibooru_explorer.js?1.6.0
 // @connect    tiuku.me
 // @grant      GM_xmlhttpRequest
 // @grant      unsafeWindow
