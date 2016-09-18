@@ -2,7 +2,7 @@
 // @name       Derpibooru Explorer
 // @author     taivastiuku@gmail.com
 // @namespace  https://tiuku.me/
-// @version    1.5.4
+// @version    1.5.4.2
 
 // @description Add recommendations and UX enhancements to derpiboo.ru
 // @match      https://derpiboo.ru/*
@@ -11,11 +11,13 @@
 // @match      https://www.derpibooru.org/*
 // @match      https://trixiebooru.org/*
 // @match      https://www.trixiebooru.org/*
-// @require    https://tiuku.me/static/jquery-2.1.1.min.js
-// @require    https://tiuku.me/static/lodash.underscore.min.js
+// @require    https://tiuku.me/static/jquery-3.1.0.min.js
+// @require    https://tiuku.me/static/underscore-min.js
 // @require    https://tiuku.me/static/backbone-min.js
 // @require    https://tiuku.me/static/keyboard.min.js
-// @require	   https://tiuku.me/static/derpibooru_explorer.js?1.5.4
+// @require	   https://tiuku.me/derpibooru_explorer.js?1.5.5
+// @connect    tiuku.me
+// @grant      GM_xmlhttpRequest
 // @grant      unsafeWindow
 // ==/UserScript==
 
@@ -23,13 +25,6 @@
  * ======
  * CONFIG
  * ======
- *
- * VIDEO_MODE   [true, false] 
- *              Enable/Disable the video mode seen on preview video. This mode
- *              fixes current image and similar images list side by side fitted
- *              into 1280x720 resolution. This allows browsing similar images
- *              while simultaneously viewing the current image without
- *              excessive scrolling.
  *
  * DEBUG        [true, false]
  *              Enable/Disable debug logging.
@@ -41,18 +36,12 @@
  * KEYBOARD_SHORTCUTS [true, false]
  *              Enable or disable keyboard shortcuts for fave, upvote, downvote
  *              and next in queue ('1', '2', '3' and 'e' repectively).
- *
- * HATS         [true, false]
- *              Enable/Disable festive hats for forum and comment avatars.
- *              Hats appear only on special occations.
  */
 
 config = {
-    VIDEO_MODE: false,
     DEBUG: false,
     LOGOUT_ENDS_SESSION: true,
-    KEYBOARD_SHORTCUTS: true,
-    HATS: true
+    KEYBOARD_SHORTCUTS: true
 }
 window.runDerpibooruExplorer(config);
 
@@ -74,6 +63,12 @@ window.runDerpibooruExplorer(config);
  *
  * Changelog
  * ---------
+ * v1.6.0  - Fix queue and similar images and adjust for new derpibooru styling.
+ *           Let derpibooru javascript handle interactions for faving and voting.
+ *           Remove hats and video mode as they are broken.
+ *           Remove highlights as they cannot be generated anymore without
+ *           significant fixes to the recommender.
+ *
  * v1.5.4  - Fix for recent derpibooru API change
  * v1.5.3  - Fix for changed derpibooru styling
  * v1.5.2  - Handle changes in interactions API and window.booru

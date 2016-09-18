@@ -2,7 +2,7 @@
 
 /** @license
  * Derpibooru Explorer
- * Copyright (C) 2014-2015 taivastiuku@gmail.com
+ * Copyright (C) 2014-2016 taivastiuku@gmail.com
  *
  * This program is free software; you can redistribute it and/or
  * modify it under the terms of the GNU General Public License
@@ -19,288 +19,337 @@
  * Source for this file can be found at:
  * https://tiuku.me/static/derpibooru_explorer.coffee
  */
+"use strict";
+var ImageQueue, Session, app, booru, csrfToken, data2images, fakeClick, gm_get, inputSelected;
 
-(function() {
-  "use strict";
-  var ImageQueue, Session, app, booru, csrfToken, data2images, hatStyles, inputSelected, videoModeStyles;
+app = null;
 
-  app = null;
+booru = unsafeWindow.booru;
 
-  booru = unsafeWindow.booru;
+inputSelected = function() {
+  var ref;
+  return (ref = document.activeElement.tagName) === "INPUT" || ref === "TEXTAREA";
+};
 
-  inputSelected = function() {
-    var ref;
-    return (ref = document.activeElement.tagName) === "INPUT" || ref === "TEXTAREA";
-  };
+csrfToken = function() {
+  return $("input[name=authenticity_token]")[0].value;
+};
 
-  csrfToken = function() {
-    return $("input[name=authenticity_token]")[0].value;
-  };
+data2images = function(image_data) {
+  var images, interactions, raw_interactions;
+  images = image_data.images ? image_data.images : image_data.search;
+  raw_interactions = image_data.interactions;
+  interactions = {};
+  _.each(raw_interactions, function(i) {
+    var obj;
+    obj = interactions["" + i.image_id] || {};
+    if (i.interaction_type === "faved") {
+      obj.faved = true;
+    } else if (i.interaction_type === "voted") {
+      obj.voted = i.value;
+    }
+    return interactions["" + i.image_id] = obj;
+  });
+  _.each(images, function(image) {
+    var interaction;
+    image.id = parseInt(image.id);
+    image.tags = image.tags ? image.tags.split(", ") : [];
+    image.tag_ids = image.tag_ids ? _.map(image.tag_ids, function(tag_id) {
+      return parseInt(tag_id);
+    }) : [];
+    interaction = interactions[image.id];
+    if (interaction) {
+      return _.extend(image, interaction);
+    }
+  });
+  return images;
+};
 
-  data2images = function(image_data) {
-    var images, interactions, raw_interactions;
-    images = image_data.images ? image_data.images : image_data.search;
-    raw_interactions = image_data.interactions;
-    interactions = {};
-    _.each(raw_interactions, function(i) {
-      var obj;
-      obj = interactions["" + i.image_id] || {};
-      if (i.interaction_type === "faved") {
-        obj.faved = true;
-      } else if (i.interaction_type === "voted") {
-        obj.voted = i.value;
+gm_get = function(url, success, failure) {
+  return GM_xmlhttpRequest({
+    method: "GET",
+    url: url,
+    onload: function(response) {
+      var ref;
+      if ((200 <= (ref = response.status) && ref < 300)) {
+        return success(JSON.parse(response.responseText));
+      } else {
+        return failure(response);
       }
-      return interactions["" + i.image_id] = obj;
-    });
-    _.each(images, function(image) {
-      var interaction;
-      image.tags = image.tags ? image.tags.split(", ") : [];
-      image.tag_ids = image.tag_ids ? _.map(image.tag_ids, function(tag_id) {
-        return parseInt(tag_id);
-      }) : [];
-      interaction = interactions[image.id];
-      if (interaction) {
-        return _.extend(image, interaction);
-      }
-    });
-    return images;
-  };
+    }
+  });
+};
 
-  window.Router = Backbone.Router.extend({
-    initialize: function(config) {
-      var path;
-      console.debug("Initializing router");
-      this.config = config;
-      this.session = new Session(config.LOGOUT_ENDS_SESSION);
-      this.imageQueue = new ImageQueue();
-      this.imagesPerPage = null;
-      path = window.location.pathname === "/images/" ? "/images" : "/images/";
-      $($(".dropdown__content")[0]).append("<a href='" + path + "#highlights'><i class='fa fa-fw fa-birthday-cake'></i> Highlights</a> <a href='" + path + "#queue'><i class='fa fa-cloud-download'></i> Queue</a>");
-      KeyboardJS.on("e", (function(_this) {
-        return function() {
-          console.debug("Next in queue");
-          if (!inputSelected()) {
-            return _this.imageQueue.next();
-          }
+fakeClick = function(target) {
+  var evt;
+  evt = document.createEvent("MouseEvents");
+  evt.initMouseEvent("click", true, true, unsafeWindow, 0, 0, 0, 0, 0, false, false, false, false, 0, null);
+  return target.dispatchEvent(evt);
+};
+
+window.Router = Backbone.Router.extend({
+  initialize: function(config) {
+    var path;
+    console.debug("Initializing router");
+    this.config = config;
+    this.session = new Session(config.LOGOUT_ENDS_SESSION);
+    this.imageQueue = new ImageQueue();
+    this.imagesPerPage = null;
+    path = window.location.pathname === "/images/" ? "/images" : "/images/";
+    $($(".dropdown__content")[0]).append("<a href='" + path + "#queue' class='header__link'><i class='fa fa-cloud-download'></i> Queue</a>");
+    KeyboardJS.on("e", (function(_this) {
+      return function() {
+        console.debug("Next in queue");
+        if (!inputSelected()) {
+          return _this.imageQueue.next();
+        }
+      };
+    })(this));
+    return console.debug("Router initialized");
+  },
+  routes: {
+    "tags/artist-colon-:artist_name": "similarArtists",
+    "": "thumbs",
+    "tags/:tag": "thumbs",
+    "search": "thumbs",
+    "search/": "thumbs",
+    "search/index": "thumbs",
+    "images": "thumbs",
+    "images/": "thumbs",
+    "images/queue": "queue",
+    "images/queue/:page": "queue",
+    "images/favourites": "thumbs",
+    "images/favourites/:page": "thumbs",
+    "images/upvoted": "thumbs",
+    "images/upvoted/:page": "thumbs",
+    "images/uploaded": "thumbs",
+    "images/uploaded/:page": "thumbs",
+    "images/watched": "thumbs",
+    "images/watched/:page": "thumbs",
+    "images/page/": null,
+    "images/page/:page": "thumbs",
+    "lists/:type": "thumbs",
+    "related/:id": "thumbs",
+    "images/:image_id": "similarImages",
+    ":image_id": "similarImages"
+  },
+  fakeNavigate: function() {
+    var params;
+    params = window.location.hash.slice(1).split("/");
+    return this[params[0]](params[1] || null);
+  },
+  similarArtists: function(artist_name) {
+    var container;
+    if (!artist_name) {
+      return;
+    }
+    console.debug("Add links to similar artists");
+    container = $("<div>").append("<h3 style='display:inline-block'>Similar artists: </h3>");
+    gm_get("https://tiuku.me/api/for-artist/" + artist_name + "?session=" + app.session.id, function(data) {
+      return _.each(data.recommendations, function(item) {
+        return container.append(templates.artistTag({
+          name: item.name,
+          url: item.link
+        }));
+      });
+    });
+    $("#tag_info_box").after("<hr>").after(container);
+    return this.thumbs();
+  },
+  queue: function(page) {
+    console.debug("Showing queue, page: " + page);
+    new MetaBarView();
+    return new QueueView({
+      page: page,
+      limit: this.imagesPerPage || 21
+    });
+  },
+  thumbs: function() {
+    if (this.imagesPerPage === null) {
+      this.imagesPerPage = $(".media-box").length;
+    }
+    console.debug("Images per page: " + this.imagesPerPage);
+    if (window.location.hash) {
+      return this.fakeNavigate();
+    } else {
+      new MetaBarView();
+      console.debug("Add queue-button to thumbnails");
+      _.each($(".media-box .media-box__header"), function(infoElement) {
+        return new ThumbnailInfoView({
+          el: infoElement,
+          type: "big"
+        });
+      });
+      return _.each($(".image-thumb-box.normalimage .imageinfo.normal"), function(infoElement) {
+        return new ThumbnailInfoView({
+          el: infoElement,
+          type: "normal"
+        });
+      });
+    }
+  },
+  similarImages: function(image_id) {
+    var target;
+    if (isNaN(parseInt(image_id))) {
+      return;
+    }
+    console.debug("Add list of similar images");
+    target = $(".center--layout--flex").after($("<div class='image-similars'>").prepend(new ImageView({
+      imageId: image_id
+    }).el));
+    return target.before("<hr>");
+  }
+});
+
+window.QueueView = Backbone.View.extend({
+  el: "#imagelist_container",
+  initialize: function(options) {
+    this.page = (options.page || 1) - 1;
+    this.limit = options.limit || 21;
+    this.queue = app.imageQueue.list();
+    this.$el.html("");
+    this.$el.addClass("queue-list");
+    return this.render();
+  },
+  events: function() {
+    return {
+      "click .queue-all": "removeAll",
+      "click .pagination a": "navigate"
+    };
+  },
+  navigate: function(event) {
+    this.undelegateEvents();
+    return setTimeout(function() {
+      return app.fakeNavigate();
+    }, 50);
+  },
+  render: function() {
+    var $content, meta, queue;
+    meta = {
+      light: false,
+      count: this.queue.length,
+      page: this.page + 1,
+      pages: Math.ceil(this.queue.length / this.limit)
+    };
+    this.$el.append(templates.queueMetabar(meta));
+    $content = $("<div class='block__content js-resizable-media-container'></div>");
+    this.$el.append($content);
+    queue = this.queue.slice(this.page * this.limit, (this.page + 1) * this.limit);
+    if (queue.length > 0) {
+      return gm_get("https://derpiboo.ru/search.json?q=id%3A" + (queue.join("+||+id%3A")), (function(_this) {
+        return function(image_data) {
+          var images;
+          images = _.sortBy(data2images(image_data), function(image) {
+            return queue.indexOf(image.id);
+          });
+          _.each(images, function(image) {
+            return $content.append(new ThumbnailView({
+              image: image
+            }).el);
+          });
+          meta.light = true;
+          return _this.$el.append(templates.queueMetabar(meta));
+        };
+      })(this), (function(_this) {
+        return function(failure) {
+          console.debug("Derpibooru API failure");
+          return $content.append("<h2>Derpibooru API failure</h2>");
         };
       })(this));
-      return console.debug("Router initialized");
-    },
-    routes: {
-      "tags/artist-colon-:artist_name": "similarArtists",
-      "": "thumbs",
-      "tags/:tag": "thumbs",
-      "search": "thumbs",
-      "search/": "thumbs",
-      "search/index": "thumbs",
-      "images": "thumbs",
-      "images/": "thumbs",
-      "images/queue": "queue",
-      "images/queue/:page": "queue",
-      "images/favourites": "thumbs",
-      "images/favourites/:page": "thumbs",
-      "images/upvoted": "thumbs",
-      "images/upvoted/:page": "thumbs",
-      "images/uploaded": "thumbs",
-      "images/uploaded/:page": "thumbs",
-      "images/watched": "thumbs",
-      "images/watched/:page": "thumbs",
-      "images/page/": null,
-      "images/page/:page": "thumbs",
-      "lists/:type": "thumbs",
-      "related/:id": "thumbs",
-      "images/:image_id": "similarImages",
-      ":image_id": "similarImages",
-      "art/*path": "forum",
-      "pony/*path": "forum",
-      "writing/*path": "forum",
-      "dis/*path": "forum",
-      "rp/*path": "forum",
-      "meta/*path": "forum"
-    },
-    fakeNavigate: function() {
-      var params;
-      params = window.location.hash.slice(1).split("/");
-      return this[params[0]](params[1] || null);
-    },
-    similarArtists: function(artist_name) {
-      var container;
-      if (!artist_name) {
-        return;
+    } else {
+      return $content.append("<h2>Empty queue</h2>");
+    }
+  },
+  removeAll: function() {
+    console.debug("Removing all images from queue");
+    return $(".add-queue.queued").click();
+  }
+});
+
+window.ImageView = Backbone.View.extend({
+  tagName: "div",
+  id: "imagelist_container",
+  className: "recommender",
+  initialize: function(options) {
+    this.isKnownImage = true;
+    this.offset = 0;
+    this.recommendations = [];
+    this.image = {
+      id: options.imageId,
+      is_faved: function() {
+        return $(".interaction--fave.active").length > 0;
+      },
+      is_upvoted: function() {
+        return $(".interaction--upvote.active").length > 0;
+      },
+      is_downvoted: function() {
+        return $(".interaction--downvote.active").length > 0;
+      },
+      fave: function() {
+        return fakeClick($(".interaction--fave")[0]);
+      },
+      upvote: function() {
+        return fakeClick($(".interaction--upvote")[0]);
+      },
+      downvote: function() {
+        return fakeClick($(".interaction--downvote")[0]);
       }
-      console.debug("Add links to similar artists");
-      container = $("<div>").append("<h3 style='display:inline-block'>Similar artists: </h3>");
-      $.get("https://tiuku.me/api/for-artist/" + artist_name + "?session=" + app.session.id, function(data) {
-        return _.each(data.recommendations, function(item) {
-          return container.append(templates.artistTag({
-            name: item.name,
-            url: item.link
-          }));
-        });
-      });
-      $("#tag_info_box").after("<hr>").after(container);
-      return this.thumbs();
-    },
-    highlights: function(page) {
-      console.debug("Getting recommendations");
-      new MetaBarView();
-      return new HighlightsView({
-        user: app.session.user
-      });
-    },
-    queue: function(page) {
-      console.debug("Showing queue, page: " + page);
-      new MetaBarView();
-      return new QueueView({
-        page: page,
-        limit: this.imagesPerPage || 21
-      });
-    },
-    thumbs: function() {
-      if (this.imagesPerPage === null) {
-        this.imagesPerPage = $(".image-thumb-box").length;
-      }
-      console.debug("Images per page: " + this.imagesPerPage);
-      if (window.location.hash) {
-        return this.fakeNavigate();
-      } else {
-        new MetaBarView();
-        console.debug("Add queue-button to thumbnails");
-        _.each($(".image-thumb-box.bigimage .imageinfo.normal"), function(infoElement) {
-          return new ThumbnailInfoView({
-            el: infoElement,
-            type: "big"
+    };
+    KeyboardJS.on("1", (function(_this) {
+      return function(event) {
+        console.debug("fave");
+        if (!inputSelected()) {
+          new NotificationView({
+            fa: "fa-star",
+            off: _this.image.is_faved()
           });
-        });
-        return _.each($(".image-thumb-box.normalimage .imageinfo.normal"), function(infoElement) {
-          return new ThumbnailInfoView({
-            el: infoElement,
-            type: "normal"
-          });
-        });
-      }
-    },
-    similarImages: function(image_id) {
-      var target;
-      if (isNaN(parseInt(image_id))) {
-        return;
-      }
-      console.debug("Add list of similar images");
-      target = $(".image-display").after($("<div class='image-similars'>").prepend(new ImageView({
-        imageId: image_id
-      }).el));
-      if (app.config.VIDEO_MODE) {
-        $("img#image_display").on("load", function() {
-          var height;
-          height = $(".image-display").height();
-          return $("#imagelist_container.recommender").height(height - 3);
-        });
-      } else {
-        target.before("<hr>");
-      }
-      if (app.config.HATS) {
-        return setTimeout(function() {
-          var day, month, today;
-          today = new Date();
-          month = today.getUTCMonth() + 1;
-          day = today.getUTCDate();
-          if (month === 12 && day > 21 && day < 27) {
-            return $(".post-avatar").append("<img class='hat-comment' src='https://tiuku.me/static/pic/jul.gif'>");
-          }
-        }, 3500);
-      }
-    },
-    forum: function(path) {
-      var day, month, today;
-      if (app.config.HATS) {
-        today = new Date();
-        month = today.getUTCMonth() + 1;
-        day = today.getUTCDate();
-        if (month === 12 && day > 21 && day < 27) {
-          return $(".post-avatar").append("<img class='hat' src='https://tiuku.me/static/pic/jul.gif'>");
+          return _this.image.fave();
         }
-      }
-    }
-  });
-
-  window.QueueView = Backbone.View.extend({
-    el: "#imagelist_container",
-    initialize: function(options) {
-      this.page = (options.page || 1) - 1;
-      this.limit = options.limit || 21;
-      this.queue = app.imageQueue.list();
-      this.$el.html("");
-      this.$el.addClass("queue-list");
-      return this.render();
-    },
-    events: function() {
-      return {
-        "click .queue-all": "removeAll",
-        "click .pagination a": "navigate"
       };
-    },
-    navigate: function(event) {
-      this.undelegateEvents();
-      return setTimeout(function() {
-        return app.fakeNavigate();
-      }, 50);
-    },
-    render: function() {
-      var meta, queue;
-      meta = {
-        light: false,
-        count: this.queue.length,
-        page: this.page + 1,
-        pages: Math.ceil(this.queue.length / this.limit)
+    })(this));
+    KeyboardJS.on("2", (function(_this) {
+      return function(event) {
+        console.debug("upvote");
+        if (!inputSelected()) {
+          new NotificationView({
+            fa: "fa-arrow-up",
+            off: _this.image.is_upvoted()
+          });
+          return _this.image.upvote();
+        }
       };
-      this.$el.append(templates.queueMetabar(meta));
-      queue = this.queue.slice(this.page * this.limit, (this.page + 1) * this.limit);
-      if (queue.length > 0) {
-        return $.get("https://derpiboo.ru/search.json?q=id%3A" + (queue.join("+||+id%3A")), (function(_this) {
-          return function(image_data) {
-            var images;
-            images = _.sortBy(data2images(image_data), function(image) {
-              return queue.indexOf(image.id);
-            });
-            _.each(images, function(image) {
-              return _this.$el.append(new ThumbnailView({
-                image: image
-              }).el);
-            });
-            meta.light = true;
-            return _this.$el.append(templates.queueMetabar(meta));
-          };
-        })(this)).fail((function(_this) {
-          return function() {
-            console.debug("Derpibooru API failure");
-            return _this.$el.append("<h2>Derpibooru API failure</h2>");
-          };
-        })(this));
-      } else {
-        return this.$el.append("<h2>Empty queue</h2>");
-      }
-    },
-    removeAll: function() {
-      console.debug("Removing all images from queue");
-      return $(".add-queue.queued").click();
+    })(this));
+    KeyboardJS.on("3", (function(_this) {
+      return function(event) {
+        console.debug("downvote");
+        if (!inputSelected()) {
+          new NotificationView({
+            fa: "fa-arrow-down",
+            off: _this.image.is_downvoted()
+          });
+          return _this.image.downvote();
+        }
+      };
+    })(this));
+    return this.load();
+  },
+  events: {
+    "click .recommender.load-more": "loadMore",
+    "click .recommender.next-in-queue": function() {
+      return app.imageQueue.next();
     }
-  });
-
-  window.HighlightsView = Backbone.View.extend({
-    el: "#imagelist_container",
-    initialize: function(options) {
-      this.$el.html("");
-      this.$el.addClass("highlights");
-      this.offset = 0;
-      this.highlights = [];
-      this.user = options.user;
-      return this.load();
-    },
-    events: {
-      "click .recommender.load-more": "loadMore"
-    },
-    load: function() {
-      return $.get("https://tiuku.me/api/highlights/" + this.user + "?session=" + app.session.id + "&offset=" + this.offset, (function(_this) {
+  },
+  loadMore: function(event) {
+    $(event.target).remove();
+    this.offset += 8;
+    return this.load();
+  },
+  load: function() {
+    var data, faves, tags, tiukuAPI;
+    console.debug("Loading recommendations for " + this.image.id);
+    if (this.isKnownImage) {
+      tiukuAPI = "https://tiuku.me/api/for-image/" + this.image.id + "?session=" + app.session.id + "&offset=" + this.offset;
+      return gm_get(tiukuAPI, (function(_this) {
         return function(data) {
           var ids;
           ids = _.filter(_.map(data.recommendations, function(item) {
@@ -308,619 +357,397 @@
           }), function(id) {
             return id !== null;
           });
-          return $.get("/api/v2/images/show/?ids=" + (ids.join()), function(image_data) {
-            var images;
-            images = _.sortBy(data2images(image_data), function(image) {
-              return ids.indexOf(image.id);
-            });
-            _this.highlights = _this.highlights.concat(images);
-            return _this.render();
-          }).fail(function() {
-            console.debug("Derpibooru API error");
-            return _this.$el.append("<h1>Derpibooru API error</h1>");
-          });
+          if (ids.length > 0 || _this.offset !== 0) {
+            return _this._tiukuSuccessLoad(ids);
+          } else {
+            _this.isKnownImage = false;
+            return _this.load();
+          }
         };
-      })(this)).fail((function(_this) {
-        return function() {
-          console.debug("Tiuku.me API error");
-          return _this.$el.append("<h1>Tiuku.me API error</h1>");
+      })(this), (function(_this) {
+        return function(fail) {
+          console.debug("Tiuku.me API failure");
+          return _this.renderFailure("Tiuku.me API failure");
         };
       })(this));
-    },
-    render: function() {
-      this.$el.html("<div class='metabar'><div class='metasection'><strong>Highlighted images for " + this.user + "</srong></div></div>");
-      _.each(this.highlights, (function(_this) {
+    } else {
+      tags = _.map($(".tag-list .tag"), function(element) {
+        return $(element).attr("data-tag-name");
+      });
+      faves = _.map($(".interaction-user-list-item"), function(element) {
+        return element.text;
+      });
+      if (tags.length + faves.length < 24) {
+        return this.render();
+      }
+      tiukuAPI = "https://tiuku.me/api/tags/image/?session=" + app.session.id + "&offset=" + this.offset;
+      data = {
+        tags: tags.join(),
+        faves: faves.join()
+      };
+      return $.post(tiukuAPI, data, (function(_this) {
+        return function(data) {
+          var ids;
+          ids = _.filter(_.map(data.recommendations, function(item) {
+            return item.id;
+          }), function(id) {
+            return id !== null;
+          });
+          return _this._tiukuSuccessLoad(ids);
+        };
+      })(this), (function(_this) {
+        return function(fail) {
+          console.debug("Tiuku.me API failure");
+          return _this.renderFailure("Tiuku.me API failure");
+        };
+      })(this));
+    }
+  },
+  _tiukuSuccessLoad: function(ids) {
+    return gm_get("/api/v2/images/show/?ids=" + (ids.join()), (function(_this) {
+      return function(image_data) {
+        var images;
+        images = _.sortBy(data2images(image_data), function(image) {
+          return ids.indexOf(image.id);
+        });
+        _this.recommendations = _this.recommendations.concat(images);
+        return _this.render();
+      };
+    })(this), (function(_this) {
+      return function(fail) {
+        console.debug("Derpiboo.ru API failure");
+        return _this.renderFailure("Derpiboo.ru API failure");
+      };
+    })(this));
+  },
+  renderFailure: function(msg) {
+    console.debug("Rendering failure message");
+    this.$el.html(templates.similarImagesTitle()).append("<div>" + msg + "</div>");
+    return this;
+  },
+  render: function() {
+    this.$el.html(templates.similarImagesTitle());
+    if (this.recommendations.length <= 0) {
+      console.debug("No thumbnails to render");
+      this.$el.append("<div>No recommendations</div>");
+    } else {
+      console.debug("Rendering thumbnails");
+      _.each(this.recommendations, (function(_this) {
         return function(item) {
           var hiddenTags;
           hiddenTags = _.intersection(item.tag_ids, booru.hiddenTagList);
           if (hiddenTags.length <= 0) {
-            return _this.$el.append(new ThumbnailView({
+            _this.$el.append(new ThumbnailView({
               image: item
             }).el);
+            return _this.$el.append(" ");
           }
         };
       })(this));
-      return this.$el.append(templates.loadMoreImage());
-    },
-    loadMore: function(event) {
-      $(event.target).remove();
-      this.offset = this.highlights.length > 0 ? this.highlights.slice(-1)[0]["id"] : 0;
-      return this.load();
+      this.$el.append(templates.loadMoreImage());
+      this.$el.append(" ");
+      this.$el.append(templates.nextInQueueImage());
     }
-  });
+    return this;
+  }
+});
 
-  window.ImageView = Backbone.View.extend({
-    tagName: "div",
-    id: "imagelist_container",
-    className: "recommender",
-    initialize: function(options) {
-      this.isKnownImage = true;
-      this.offset = 0;
-      this.recommendations = [];
-      this.image = {
-        id: options.imageId,
-        is_faved: function() {
-          return $(".fave_link.faved").length > 0;
-        },
-        is_upvoted: function() {
-          return $(".vote_up_link.voted_up").length > 0;
-        },
-        is_downvoted: function() {
-          return $(".vote_down_link.voted_down").length > 0;
-        },
-        fave: function() {
-          return $($(".favourites")[0]).click();
-        },
-        upvote: function() {
-          return $($(".upvote-span")[0]).click();
-        },
-        downvote: function() {
-          return $($(".downvote-span")[0]).click();
-        }
-      };
-      KeyboardJS.on("1", (function(_this) {
-        return function(event) {
-          console.debug("fave");
-          if (!inputSelected()) {
-            new NotificationView({
-              fa: "fa-star",
-              off: _this.image.is_faved()
-            });
-            return _this.image.fave();
-          }
-        };
-      })(this));
-      KeyboardJS.on("2", (function(_this) {
-        return function(event) {
-          console.debug("upvote");
-          if (!inputSelected()) {
-            new NotificationView({
-              fa: "fa-arrow-up",
-              off: _this.image.is_upvoted()
-            });
-            return _this.image.upvote();
-          }
-        };
-      })(this));
-      KeyboardJS.on("3", (function(_this) {
-        return function(event) {
-          console.debug("downvote");
-          if (!inputSelected()) {
-            new NotificationView({
-              fa: "fa-arrow-down",
-              off: _this.image.is_downvoted()
-            });
-            return _this.image.downvote();
-          }
-        };
-      })(this));
-      return this.load();
-    },
-    events: {
-      "click .recommender.load-more": "loadMore",
-      "click .recommender.next-in-queue": function() {
-        return app.imageQueue.next();
-      }
-    },
-    loadMore: function(event) {
-      $(event.target).remove();
-      this.offset += 8;
-      return this.load();
-    },
-    load: function() {
-      var data, faves, tags, tiukuAPI;
-      console.debug("Loading recommendations for " + this.image.id);
-      if (this.isKnownImage) {
-        tiukuAPI = "https://tiuku.me/api/for-image/" + this.image.id + "?session=" + app.session.id + "&offset=" + this.offset;
-        return $.get(tiukuAPI, (function(_this) {
-          return function(data) {
-            var ids;
-            ids = _.filter(_.map(data.recommendations, function(item) {
-              return item.id;
-            }), function(id) {
-              return id !== null;
-            });
-            if (ids.length > 0 || _this.offset !== 0) {
-              return _this._tiukuSuccessLoad(ids);
-            } else {
-              _this.isKnownImage = false;
-              return _this.load();
-            }
-          };
-        })(this)).fail((function(_this) {
-          return function() {
-            console.debug("Tiuku.me API failure");
-            return _this.renderFailure("Tiuku.me API failure");
-          };
-        })(this));
-      } else {
-        tags = _.map($(".tag-list .tag"), function(element) {
-          return $(element).attr("data-tag-name");
-        });
-        faves = _.map($(".interaction-user-list-item"), function(element) {
-          return element.text;
-        });
-        if (tags.length + faves.length < 24) {
-          return this.render();
-        }
-        tiukuAPI = "https://tiuku.me/api/tags/image/?session=" + app.session.id + "&offset=" + this.offset;
-        data = {
-          tags: tags.join(),
-          faves: faves.join()
-        };
-        return $.post(tiukuAPI, data, (function(_this) {
-          return function(data) {
-            var ids;
-            ids = _.filter(_.map(data.recommendations, function(item) {
-              return item.id;
-            }), function(id) {
-              return id !== null;
-            });
-            return _this._tiukuSuccessLoad(ids);
-          };
-        })(this)).fail((function(_this) {
-          return function() {
-            console.debug("Tiuku.me API failure");
-            return _this.renderFailure("Tiuku.me API failure");
-          };
-        })(this));
-      }
-    },
-    _tiukuSuccessLoad: function(ids) {
-      return $.get("/api/v2/images/show/?ids=" + (ids.join()), (function(_this) {
-        return function(image_data) {
-          var images;
-          images = _.sortBy(data2images(image_data), function(image) {
-            return ids.indexOf(image.id);
-          });
-          _this.recommendations = _this.recommendations.concat(images);
-          return _this.render();
-        };
-      })(this)).fail((function(_this) {
+window.ThumbnailView = Backbone.View.extend({
+  tagName: "div",
+  className: "media-box recommender",
+  events: {
+    "click .add-queue": "queue"
+  },
+  initialize: function(options) {
+    var spoileredTags;
+    this.image = options.image;
+    spoileredTags = _.intersection(this.image.tag_ids, booru.spoileredTagList);
+    _.extend(this.image, {
+      spoileredTags: spoileredTags,
+      isSpoilered: function() {
+        return spoileredTags.length > 0;
+      },
+      isQueued: (function(_this) {
         return function() {
-          console.debug("Derpiboo.ru API failure");
-          return _this.renderFailure("Derpiboo.ru API failure");
+          return app.imageQueue.contains(_this.image.id);
         };
-      })(this));
-    },
-    renderFailure: function(msg) {
-      console.debug("Rendering failure message");
-      this.$el.html(templates.similarImagesTitle()).append("<div>" + msg + "</div>");
-      return this;
-    },
-    render: function() {
-      this.$el.html(templates.similarImagesTitle());
-      if (this.recommendations.length <= 0) {
-        console.debug("No thumbnails to render");
-        this.$el.append("<div>No recommendations</div>");
-      } else {
-        console.debug("Rendering thumbnails");
-        _.each(this.recommendations, (function(_this) {
-          return function(item) {
-            var hiddenTags;
-            hiddenTags = _.intersection(item.tag_ids, booru.hiddenTagList);
-            if (hiddenTags.length <= 0) {
-              _this.$el.append(new ThumbnailView({
-                image: item
-              }).el);
-              return _this.$el.append(" ");
-            }
-          };
-        })(this));
-        if (app.config.VIDEO_MODE === true) {
-          this.$el.append(templates.loadMoreBar());
-          this.$el.append(templates.nextInQueueBar());
-        } else {
-          this.$el.append(templates.loadMoreImage());
-          this.$el.append(" ");
-          this.$el.append(templates.nextInQueueImage());
-        }
-      }
-      return this;
-    }
-  });
-
-  window.ThumbnailView = Backbone.View.extend({
-    tagName: "div",
-    className: "image-thumb-box bigimage recommender",
-    events: {
-      "click .add-queue": "queue",
-      "click .vote_up_link": "voteUp",
-      "click .vote_down_link": "voteDown",
-      "click .fave_link": "fave"
-    },
-    initialize: function(options) {
-      var spoileredTags;
-      this.image = options.image;
-      spoileredTags = _.intersection(this.image.tag_ids, booru.spoileredTagList);
-      _.extend(this.image, {
-        spoileredTags: spoileredTags,
-        isSpoilered: function() {
-          return spoileredTags.length > 0;
-        },
-        isQueued: (function(_this) {
-          return function() {
-            return app.imageQueue.contains(_this.image.id);
-          };
-        })(this)
-      });
-      if (this.image.deletion_reason !== void 0) {
-        return this.renderDeleted();
-      } else if (this.image.duplicate_of !== void 0) {
-        this.short_image = "";
-        return this.$el.html("<div class='image-container thumb'><a href='/" + this.image.duplicate_of + "'>Duplicate of " + this.image.duplicate_of + "</a></div>");
-      } else {
-        this.short_image = this.image.image.replace(/__[a-z0-9+_-]+\./, ".");
-        return this.render();
-      }
-    },
-    render: function() {
-      this.$el.html(templates.thumbnail({
-        image: this.image,
-        short_image: this.short_image
-      }));
-      return this.$el.append(" ");
-    },
-    renderDeleted: function() {
-      this.$el.html(templates.thumbnailDeleted({
-        image: this.image
-      }));
-      return this.$el.append(" ");
-    },
-    queue: function() {
-      console.debug("Queuing " + this.image.id);
-      app.imageQueue.toggle(this.image.id);
-      return this.render();
-    },
-    fave: function(event) {
-      var putData;
-      event.preventDefault();
-      putData = {
-        _method: "PUT",
-        id: this.image.id,
-        value: this.image.faved === true ? false : true,
-        "class": "Image"
-      };
-      return $.ajax({
-        url: "/api/v2/interactions/fave",
-        data: putData,
-        type: "PUT",
-        headers: {
-          "X-CSRF-Token": csrfToken()
-        },
-        dataType: "json",
-        success: (function(_this) {
-          return function(voteData) {
-            _this.image.faved = putData.value;
-            if (_this.image.faved === true) {
-              _this.image.voted = "up";
-            }
-            _.extend(_this.image, voteData);
-            return _this.render();
-          };
-        })(this)
-      });
-    },
-    voteUp: function(event) {
-      return this.vote(event, "up");
-    },
-    voteDown: function(event) {
-      return this.vote(event, "down");
-    },
-    vote: function(event, dir) {
-      var putData;
-      event.preventDefault();
-      putData = {
-        _method: "PUT",
-        id: this.image.id,
-        value: this.image.voted === dir ? false : dir,
-        "class": "Image"
-      };
-      return $.ajax({
-        url: "/api/v2/interactions/vote",
-        data: putData,
-        type: "PUT",
-        headers: {
-          "X-CSRF-Token": csrfToken()
-        },
-        dataType: "json",
-        success: (function(_this) {
-          return function(voteData) {
-            _this.image.voted = putData.value;
-            _.extend(_this.image, voteData);
-            return _this.render();
-          };
-        })(this)
-      });
-    }
-  });
-
-  window.ThumbnailInfoView = Backbone.View.extend({
-    initialize: function(options) {
-      var imageContainer;
-      this.el = options.el;
-      this.type = options.type;
-      imageContainer = this.$el.parent().find(".image-container");
-      this.link = imageContainer.attr("data-download-uri").replace(/[\/]download[\/]/, "/view/").replace(/__[a-z0-9+_-]+\./, ".");
-      this.image = {
-        id: imageContainer.attr("data-image-id"),
-        id: parseInt(this.$el.find(".comments_link").attr("href").split("#")[0].slice(1)),
-        tags: imageContainer.attr("data-image-tag-aliases"),
-        score: imageContainer.attr("data-upvotes"),
-        faves: imageContainer.attr("data-faves"),
-        representations: JSON.parse(imageContainer.attr("data-uris")),
-        image: this.link
-      };
-      return this.render();
-    },
-    events: {
-      "click .add-queue": "queue"
-    },
-    render: function() {
-      if (_.isEmpty(this.image)) {
-        this.remove();
-      }
-      this.$el.find(".add-queue").remove();
-      this.$el.find(".id").remove();
-      if (this.type === "big") {
-        this.$el.prepend("<a href='" + this.link + "' class='id' title='" + this.image.id + "'><i class='fa fa-image'></i><span class='hide-mobile'> " + this.image.id + "</span></a>");
-        if (app.imageQueue.contains(this.image.id)) {
-          return this.$el.append("<span class='add-queue queued'%><a><i class='fa fa-plus-square'></i><span class='hide-mobile'> in queue</span></a></span>");
-        } else {
-          return this.$el.append("<span class='add-queue'><a><i class='fa fa-plus-square'></i><span class='hide-mobile'> Queue</span></a></span>");
-        }
-      } else if (this.type === "normal") {
-        this.$el.prepend("<a href='" + this.link + "' class='id' title='" + this.image.id + "'><i class='fa fa-image'></i></a>");
-        if (app.imageQueue.contains(this.image.id)) {
-          return this.$el.append("<span class='add-queue queued'%><a><i class='fa fa-plus-square'></i></a></span>");
-        } else {
-          return this.$el.append("<span class='add-queue'><a><i class='fa fa-plus-square'></i></a></span>");
-        }
-      }
-    },
-    queue: function() {
-      console.debug("Queuing " + this.image.id);
-      app.imageQueue.toggle(this.image.id);
-      return this.render();
-    }
-  });
-
-  window.MetaBarView = Backbone.View.extend({
-    el: "#imagelist_container > .metabar",
-    events: {
-      "click .queue-all": "queueAll"
-    },
-    initialize: function() {
-      console.debug("Initializing metabar");
-      return this.$el.find(".othermeta").prepend(templates.queueAll());
-    },
-    queueAll: function() {
-      console.debug("Queuing all images");
-      return $(".add-queue:not(.queued)").click();
-    }
-  });
-
-  window.NotificationView = Backbone.View.extend({
-    tagName: "div",
-    className: "over-notify",
-    initialize: function(options) {
-      if (options.fa === void 0) {
-        return;
-      }
-      this.$el.append($("<span class='fa " + options.fa + " " + (options.off === true ? "off" : "") + "'>"));
-      $("#content").append(this.el);
-      return setTimeout((function(_this) {
-        return function() {
-          return _this.$el.fadeOut("fast", function() {
-            return _this.remove();
-          });
-        };
-      })(this), 1000);
-    }
-  });
-
-  ImageQueue = (function() {
-    function ImageQueue() {
-      console.debug("Initializing queue");
-      this.load();
-      this.actionCalled = false;
-    }
-
-    ImageQueue.prototype.load = function() {
-      return this.queue = JSON.parse(localStorage.getItem("derpQueue") || "[]") || [];
-    };
-
-    ImageQueue.prototype.add = function(id) {
-      id = parseInt(id);
-      if (isNaN(id)) {
-        return;
-      }
-      console.debug("Adding #" + id + " to queue");
-      this.load();
-      new NotificationView({
-        fa: "fa-cloud-download"
-      });
-      this.queue.push(id);
-      return this.save();
-    };
-
-    ImageQueue.prototype.remove = function(id) {
-      id = parseInt(id);
-      if (isNaN(id)) {
-        return;
-      }
-      console.debug("Removing #" + id + " to queue");
-      this.load();
-      new NotificationView({
-        fa: "fa-cloud-download",
-        off: true
-      });
-      this.queue = _.filter(this.queue, function(queue_id) {
-        return queue_id !== id;
-      });
-      return this.save();
-    };
-
-    ImageQueue.prototype.toggle = function(id) {
-      id = parseInt(id);
-      if (isNaN(id)) {
-        return;
-      }
-      console.debug("Toggling #" + id);
-      this.load();
-      if (_.contains(this.queue, id)) {
-        return this.remove(id);
-      } else {
-        return this.add(id);
-      }
-    };
-
-    ImageQueue.prototype.next = function() {
-      var nextId;
-      new NotificationView({
-        fa: "fa-arrow-right"
-      });
-      this.load();
-      nextId = this.queue.shift();
-      if (nextId === void 0 || this.actionCalled) {
-        return;
-      }
-      this.actionCalled = true;
-      console.debug("Moving to next: #" + nextId);
-      this.save();
-      return document.location = "/" + nextId;
-    };
-
-    ImageQueue.prototype.save = function() {
-      console.debug("Saving queue");
-      localStorage.setItem("derpQueue", JSON.stringify(this.queue));
-      localStorage.setItem("derpHistory", "");
-      return localStorage.setItem("derpCache", "");
-    };
-
-    ImageQueue.prototype.contains = function(id) {
-      return _.contains(this.queue, id);
-    };
-
-    ImageQueue.prototype.list = function() {
-      return _.clone(this.queue);
-    };
-
-    return ImageQueue;
-
-  })();
-
-  Session = (function() {
-    function Session(logoutEndsSession) {
-      var oldID, oldUser;
-      this.logoutEndsSession = logoutEndsSession != null ? logoutEndsSession : true;
-      console.debug("Initializing session");
-      this.user = booru.userName;
-      oldID = localStorage.getItem("derpSession");
-      oldUser = localStorage.getItem("derpUser");
-      if (this.user !== oldUser && this.logoutEndsSession === true) {
-        console.debug("User changed: " + oldUser + " -> " + this.user);
-        this.newSession();
-      } else if (oldID === null) {
-        console.debug("No session id: New Session");
-        this.newSession();
-      } else {
-        console.debug("Continue session");
-        this.id = oldID;
-      }
-    }
-
-    Session.prototype.newSession = function() {
-      this.id = this._makeId();
-      localStorage.setItem("derpSession", this.id);
-      localStorage.setItem("derpUser", this.user);
-      localStorage.setItem("derpQueue", null);
-      return localStorage.setItem("derpHistory", null);
-    };
-
-    Session.prototype._makeId = function() {
-      var randChar;
-      randChar = function() {
-        var chars;
-        chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
-        return chars.charAt(Math.floor(Math.random() * chars.length));
-      };
-      return _.map([1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16], randChar).join("");
-    };
-
-    return Session;
-
-  })();
-
-  window.templates = {};
-
-  window.templates.thumbnail = _.template("<div class='imageinfo normal'> <span> <a href='<%= short_image %>' class='id' title='<%- image.id %>'><i class='fa fa-image'></i><span class='hide-mobile'> <%- image.id %></span></a> <a class='fave_link' href='#'><span class='fave-span<% if (image.faved == true) {print('-faved');} %>'><i class='fa fa-star'></i> <span class='favourites'><%- image.faves %></span></span></a> <a class='vote_up_link' href='#'><span class='vote-up-span<% if (image.voted == 'up') {print('-up-voted');} %>'><i class='fa fa-arrow-up vote-up'></i></span></a> <span class='score'><%- image.score %></span> <a class='vote_down_link' href='#'><span class='vote-down-span<% if (image.voted == 'down') {print('-down-voted');} %>'><i class='fa fa-arrow-down' title='neigh'></i></a> <a href='/<%= image.id %>#comments' class='comments_link'><i class='fa fa-comments'></i></a> <% if (image.isQueued()) { %> <span class='add-queue queued'%><a><i class='fa fa-plus-square'></i><span class='hide-mobile'> in queue</span></a></span> <% } else { %> <span class='add-queue'><a><i class='fa fa-plus-square'></i><span class='hide-mobile'> queue</span></a></span> <% } %> </span> </div> <div class='image-container thumb'><a href='/<%= image.id %>'><% if (image.isSpoilered()) { print(image.tags.join(', ')); } else { %><img src='<%= image.representations.thumb %>' /><% } %></a></div>");
-
-  window.templates.thumbnailDeleted = _.template("<div class='imageinfo normal'> <span><%- image.id %></span> </div> <div class='image-container thumb'><span><%- image.deletion_reason %></span></div>");
-
-  window.templates.nextInQueueImage = _.template("<div class='image-thumb-box bigimage recommender next-in-queue'> <div class='imageinfo normal spacer'></div> <div class='image-container thumb'> <a>Next in queue <i class='fa fa-arrow-right'></i></a> </div> </div>");
-
-  window.templates.loadMoreImage = _.template("<div class='image-thumb-box bigimage recommender load-more'> <div class='imageinfo normal spacer'></div> <div class='image-container thumb load-more-inner'> <a>Load more</a> </div> </div>");
-
-  window.templates.nextInQueueBar = _.template("<div class='image-thumb-box bigimage recommender next-in-queue next-in-queue-bar'> <div><a>Next in queue <i class='fa fa-arrow-right'></i></a></div> </div>");
-
-  window.templates.loadMoreBar = _.template("<div> <div class='load-more-inner'> <a>Load more</a> </div> </div>");
-
-  window.templates.similarImagesTitle = _.template("<div id='similars-title'> <h6>Similar Images</h6> </div>");
-
-  window.templates.artistTag = _.template("<span class='tag tag-ns-artist'> <a href='<%= url %>'><%- name %></a> </span>");
-
-  window.templates.queueAll = _.template("<a class='queue-all' title='Queue all images on page'> <i class='fa fa-cloud-download'></i> <span class='hide-mobile'>Queue All</span> </a>");
-
-  window.templates.queueMetabar = _.template("<div class='metabar meta-table<% if (light) { print(' metabar-light') } %>'> <div class='metasection'> <strong>Queue of <%- count %> images</strong> <div class='pagination'> <nav class='pagination'> <% if (page > 1) { %> <span class='first'><a href='/images/#queue/'>« First</a></span> <span class='prev'><a href='/images/#queue/<% print(page - 1) %>'>‹ Prev</a></span> <% } if (page > 5) { %> <span class='page gap'>…</span> <% } for (var i = Math.max(page - 4, 1); i < page; i++) { %> <span class='page'><a href='/images/#queue/<%- i %>'><%- i %></a></span> <% } if (pages > 1) { %> <span class='page current'><%- page %></span> <% } for (var i = page + 1; i < page + 5 && i <= pages; i++) { %> <span class='page'><a href='/images/#queue/<%- i %>'><%- i %></a></span> <% } if (page + 5 < pages) { %> <span class='page gap'>…</span> <% } if (pages > 1 && page < pages) { %> <span class='next'><a href='/images/#queue/<% print(page + 1) %>'>Next</a></span> <span class='last'><a href='/images/#queue/'>Last</a></span> <% } %> </nav> </div> </div> <div class='othermeta'> <a class='queue-all' title='Remove all images from queue'> <i class='fa fa-cloud-download'></i> <span class='hide-mobile'>Remove All</span> </a> </div> </div>");
-
-  videoModeStyles = "<style type='text/css'> .image_show_container { width: 720px; display: inline-block; } #imagelist_container.recommender { display: inline-block; width: 528px; height: 720px; overflow-y: scroll; vertical-align: top; #image_display { max-width: 100%; height: auto; } </style>";
-
-  $("head").append("<style type='text/css'> .over-notify { border-radius: 5px; padding: 10px; position: fixed; right: 37%; top: 10px; line-height: 100px; width: 120px; height: 120px; font-size: 120px; text-align: center; background-color: rgba(90, 90, 90, 0.3); } .over-notify .fa.off { color: black; } .over-notify .fa-star { color: gold; } .over-notify .fa-arrow-up { color: #67af2b; } .over-notify .fa-arrow-down { color: #cf0001; } .over-notify .fa-arrow-right, .over-notify .fa-cloud-download { color: DeepPink; } .recommender .fave-span { color: #c4b246; } .recommender .fave-span:hover, .recommender .vote-up-span:hover { color: white; } .recommender .fave-span-faved { display: inline!important; color: white!important; background: #c4b246!important; } .recommender .vote-up-span { color: #67af2b; } .recommender .vote-up-span-up-voted { display: inline!important; color: white!important; background: #67af2b!important; } .recommender .vote-down { color: #cf0001; } .recommender .vote-down-span-down-voted { display: inline!important; color: white!important; background: #cf0001!important; } .recommender.load-more-bar.bigimage.image, .recommender.next-in-queue-bar.bigimage.image { width: 506px; } .recommender.next-in-queue-bar.bigimage.image { margin-bottom: 600px; } .recommender.load-more-bar div, .recommender.next-in-queue-bar div { width: 100%; height: 100%; text-align: center; line-height: 50px; } .recommender.load-more a, .recommender.next-in-queue a { cursor: pointer; } .imageinfo.normal.spacer { height: 12px; } .id { margin-right: 2px; padding-left: 2px; padding-right: 2px; } .id:hover { color: white; background: #57a4db; } .add-queue { margin-left: 2px; padding: 0 2px; } .add-queue a { cursor: pointer; } .add-queue.queued, .add-queue:hover{ background: #57a4db; } .add-queue.queued a, .add-queue a:hover { color: white!important; } #similars-title h2 { display: inline-block; } #similars-title .fa-star { color: gold; cursor: help; } .highlights .bigimage.recommender, .queue-list .bigimage.recommender { margin-left: 5px; } ::selection { background: pink; } </style>");
-
-  hatStyles = "<style type='text/css'> .post, .post-meta { overflow: visible!important; } .post-avatar { position: relative; } .hat { position: absolute; top: -100px; left: -26px; } .hat-comment { position: absolute; top: -36px; left: -4px; transform: scale(1.28, 1.28); } .queue-all { cursor: pointer; } </style>";
-
-  window.runDerpibooruExplorer = function(config) {
-    if (config.VIDEO_MODE === true) {
-      $("head").append(videoModeStyles);
-      $(document).scrollTop(90);
-    }
-    if (config.HATS === true) {
-      $("head").append(hatStyles);
-    }
-    if (config.DEBUG === false) {
-      console.debug = function() {};
-    }
-    if (config.KEYBOARD_SHORTCUTS === false) {
-      KeyboardJS.on = function() {};
-    }
-    console.debug("Starting Derpibooru Explorer");
-    app = new Router(config);
-    Backbone.history.start({
-      pushState: true,
-      hashChange: false
+      })(this)
     });
-    return console.debug("Derpibooru Explorer started");
+    if (this.image.deletion_reason !== void 0) {
+      return this.renderDeleted();
+    } else if (this.image.duplicate_of !== void 0) {
+      this.short_image = "";
+      return this.$el.html("<div class='image-container thumb'><a href='/" + this.image.duplicate_of + "'>Duplicate of " + this.image.duplicate_of + "</a></div>");
+    } else {
+      this.short_image = this.image.image.replace(/__[a-z0-9+_-]+\./, ".");
+      return this.render();
+    }
+  },
+  render: function() {
+    this.$el.attr("data-image-id", this.image.id);
+    this.$el.html(templates.thumbnail({
+      image: this.image,
+      short_image: this.short_image
+    }));
+    return this.$el.append(" ");
+  },
+  renderDeleted: function() {
+    this.$el.html(templates.thumbnailDeleted({
+      image: this.image
+    }));
+    return this.$el.append(" ");
+  },
+  queue: function() {
+    console.debug("Queuing " + this.image.id);
+    app.imageQueue.toggle(this.image.id);
+    return this.render();
+  }
+});
+
+window.ThumbnailInfoView = Backbone.View.extend({
+  initialize: function(options) {
+    var imageContainer;
+    this.el = options.el;
+    this.type = options.type;
+    imageContainer = this.$el.parent().find(".image-container");
+    this.link = imageContainer.attr("data-download-uri").replace(/[\/]download[\/]/, "/view/").replace(/__[a-z0-9+_-]+\./, ".");
+    this.image = {
+      id: parseInt(imageContainer.attr("data-image-id")),
+      tags: imageContainer.attr("data-image-tag-aliases"),
+      score: imageContainer.attr("data-upvotes"),
+      faves: imageContainer.attr("data-faves"),
+      representations: JSON.parse(imageContainer.attr("data-uris")),
+      image: this.link
+    };
+    this.render();
+    return console.debug(this.image);
+  },
+  events: {
+    "click .add-queue": "queue"
+  },
+  render: function() {
+    if (_.isEmpty(this.image)) {
+      this.remove();
+    }
+    this.$el.find(".id").remove();
+    this.$el.find(".add-queue").remove();
+    this.$el.prepend("<a href='" + this.link + "' class='id' title='" + this.image.id + "'><i class='fa fa-image'></i></a>");
+    if (app.imageQueue.contains(this.image.id)) {
+      return this.$el.append("<a class='add-queue queued'><i class='fa fa-plus-square'></i></span></a>");
+    } else {
+      return this.$el.append("<a class='add-queue'><i class='fa fa-plus-square'></i></span></a>");
+    }
+  },
+  queue: function() {
+    console.debug("Queuing " + this.image.id);
+    app.imageQueue.toggle(this.image.id);
+    return this.render();
+  }
+});
+
+window.MetaBarView = Backbone.View.extend({
+  el: "#imagelist_container > .block__header",
+  events: {
+    "click .queue-all": "queueAll"
+  },
+  initialize: function() {
+    console.debug("Initializing metabar");
+    return this.$el.find(".flex__right").prepend(templates.queueAll());
+  },
+  queueAll: function() {
+    console.debug("Queuing all images");
+    return $(".add-queue:not(.queued)").click();
+  }
+});
+
+window.NotificationView = Backbone.View.extend({
+  tagName: "div",
+  className: "over-notify",
+  initialize: function(options) {
+    if (options.fa === void 0) {
+      return;
+    }
+    this.$el.append($("<span class='fa " + options.fa + " " + (options.off === true ? "off" : "") + "'>"));
+    $("#content").append(this.el);
+    return setTimeout((function(_this) {
+      return function() {
+        return _this.$el.fadeOut("fast", function() {
+          return _this.remove();
+        });
+      };
+    })(this), 1000);
+  }
+});
+
+ImageQueue = (function() {
+  function ImageQueue() {
+    console.debug("Initializing queue");
+    this.load();
+    this.actionCalled = false;
+  }
+
+  ImageQueue.prototype.load = function() {
+    return this.queue = JSON.parse(localStorage.getItem("derpQueue") || "[]") || [];
   };
 
-}).call(this);
+  ImageQueue.prototype.add = function(id) {
+    id = parseInt(id);
+    if (isNaN(id)) {
+      return;
+    }
+    console.debug("Adding #" + id + " to queue");
+    this.load();
+    new NotificationView({
+      fa: "fa-cloud-download"
+    });
+    this.queue.push(id);
+    return this.save();
+  };
+
+  ImageQueue.prototype.remove = function(id) {
+    id = parseInt(id);
+    if (isNaN(id)) {
+      return;
+    }
+    console.debug("Removing #" + id + " to queue");
+    this.load();
+    new NotificationView({
+      fa: "fa-cloud-download",
+      off: true
+    });
+    this.queue = _.filter(this.queue, function(queue_id) {
+      return queue_id !== id;
+    });
+    return this.save();
+  };
+
+  ImageQueue.prototype.toggle = function(id) {
+    id = parseInt(id);
+    if (isNaN(id)) {
+      return;
+    }
+    console.debug("Toggling #" + id);
+    this.load();
+    if (_.contains(this.queue, id)) {
+      return this.remove(id);
+    } else {
+      return this.add(id);
+    }
+  };
+
+  ImageQueue.prototype.next = function() {
+    var nextId;
+    new NotificationView({
+      fa: "fa-arrow-right"
+    });
+    this.load();
+    nextId = this.queue.shift();
+    if (nextId === void 0 || this.actionCalled) {
+      return;
+    }
+    this.actionCalled = true;
+    console.debug("Moving to next: #" + nextId);
+    this.save();
+    return document.location = "/" + nextId;
+  };
+
+  ImageQueue.prototype.save = function() {
+    console.debug("Saving queue");
+    localStorage.setItem("derpQueue", JSON.stringify(this.queue));
+    localStorage.setItem("derpHistory", "");
+    return localStorage.setItem("derpCache", "");
+  };
+
+  ImageQueue.prototype.contains = function(id) {
+    return _.contains(this.queue, id);
+  };
+
+  ImageQueue.prototype.list = function() {
+    return _.clone(this.queue);
+  };
+
+  return ImageQueue;
+
+})();
+
+Session = (function() {
+  function Session(logoutEndsSession) {
+    var oldID, oldUser;
+    this.logoutEndsSession = logoutEndsSession != null ? logoutEndsSession : true;
+    console.debug("Initializing session");
+    this.user = booru.userName;
+    oldID = localStorage.getItem("derpSession");
+    oldUser = localStorage.getItem("derpUser");
+    if (this.user !== oldUser && this.logoutEndsSession === true) {
+      console.debug("User changed: " + oldUser + " -> " + this.user);
+      this.newSession();
+    } else if (oldID === null) {
+      console.debug("No session id: New Session");
+      this.newSession();
+    } else {
+      console.debug("Continue session");
+      this.id = oldID;
+    }
+  }
+
+  Session.prototype.newSession = function() {
+    this.id = this._makeId();
+    localStorage.setItem("derpSession", this.id);
+    localStorage.setItem("derpUser", this.user);
+    localStorage.setItem("derpQueue", null);
+    return localStorage.setItem("derpHistory", null);
+  };
+
+  Session.prototype._makeId = function() {
+    var randChar;
+    randChar = function() {
+      var chars;
+      chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
+      return chars.charAt(Math.floor(Math.random() * chars.length));
+    };
+    return _.map([1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16], randChar).join("");
+  };
+
+  return Session;
+
+})();
+
+window.templates = {};
+
+window.templates.thumbnail = _.template("<div class='media-box__header'> <a href='<%= short_image %>' class='id' title='<%- image.id %>'><i class='fa fa-image'></i></a> <a class='interaction--fave<% if (image.faved == true) {print(' active');} %>' href='#' data-image-id='<%- image.id %>'><span class='fave-span'><i class='fa fa-star'></i> <span class='favourites' data-image-id='<%- image.id %>'><%- image.faves %></span></span></a> <a class='interaction--upvote<% if (image.voted == 'up') {print(' active');} %>' href='#' data-image-id='<%- image.id %>'><span class='vote-up-span'><i class='fa fa-arrow-up vote-up'></i></span></a> <span class='score' data-image-id='<%- image.id %>'><%- image.score %></span> <a class='interaction--downvote<% if (image.voted == 'down') {print(' active');} %>' href='#' data-image-id='<%- image.id %>'><span class='vote-down-span'><i class='fa fa-arrow-down' title='neigh'></i></a> <a href='/<%= image.id %>#comments' class='interaction--comments'><i class='fa fa-comments'></i></a> <% if (image.isQueued()) { %> <a class='add-queue queued'%><i class='fa fa-plus-square'></i></a> <% } else { %> <a class='add-queue'><i class='fa fa-plus-square'></i></a> <% } %> </div> <div class='media-box__content center--flex-hv media-box__content--large'> <div class='image-container thumb'><a href='/<%= image.id %>'><% if (image.isSpoilered()) { print(image.tags.join(', ')); } else { %><img src='<%= image.representations.thumb %>' /><% } %></a></div> </div>");
+
+window.templates.thumbnailDeleted = _.template("<div class='media-box__header'> <span><%- image.id %></span> </div> <div class='image-container thumb'><span><%- image.deletion_reason %></span></div>");
+
+window.templates.nextInQueueImage = _.template("<div class='image-thumb-box bigimage recommender next-in-queue'> <div class='imageinfo normal spacer'></div> <div class='image-container thumb'> <a>Next in queue <i class='fa fa-arrow-right'></i></a> </div> </div>");
+
+window.templates.loadMoreImage = _.template("<div class='image-thumb-box bigimage recommender load-more'> <div class='imageinfo normal spacer'></div> <div class='image-container thumb load-more-inner'> <a>Load more</a> </div> </div>");
+
+window.templates.nextInQueueBar = _.template("<div class='image-thumb-box bigimage recommender next-in-queue next-in-queue-bar'> <div><a>Next in queue <i class='fa fa-arrow-right'></i></a></div> </div>");
+
+window.templates.loadMoreBar = _.template("<div> <div class='load-more-inner'> <a>Load more</a> </div> </div>");
+
+window.templates.similarImagesTitle = _.template("<div id='similars-title'> <h6>Similar Images</h6> </div>");
+
+window.templates.artistTag = _.template("<span class='tag tag-ns-artist'> <a href='<%= url %>'><%- name %></a> </span>");
+
+window.templates.queueAll = _.template("<a class='queue-all' title='Queue all images on page'> <i class='fa fa-cloud-download'></i> <span class='hide-mobile'>Queue All</span> </a>");
+
+window.templates.queueMetabar = _.template("<div class='block__header flex'> <span class='block__header__title hide-mobile'>Queue of <%- count %> images</span> <nav class='pagination'> <% if (page > 1) { %> <a href='/images/#queue/'>« First</a> <span class='prev'><a href='/images/#queue/<% print(page - 1) %>'>‹ Prev</a></span> <% } if (page > 5) { %> <span class='page gap'>…</span> <% } for (var i = Math.max(page - 4, 1); i < page; i++) { %> <a class='page' href='/images/#queue/<%- i %>'><%- i %></a> <% } if (pages > 1) { %> <span class='page-current'><%- page %></span> <% } for (var i = page + 1; i < page + 5 && i <= pages; i++) { %> <a class='page' href='/images/#queue/<%- i %>'><%- i %></a></span> <% } if (page + 5 < pages) { %> <span class='page gap'>…</span> <% } if (pages > 1 && page < pages) { %> <span class='next'><a href='/images/#queue/<% print(page + 1) %>'>Next</a></span> <a href='/images/#queue/'>Last</a> <% } %> </nav> <div class='flex__right'> <a class='queue-all' title='Remove all images from queue'> <i class='fa fa-cloud-download'></i> <span class='hide-mobile'>Remove All</span> </a> </div> </div>");
+
+$("head").append("<style type='text/css'> .over-notify { border-radius: 5px; padding: 10px; position: fixed; right: 37%; top: 10px; line-height: 100px; width: 120px; height: 120px; font-size: 120px; text-align: center; background-color: rgba(90, 90, 90, 0.3); } .over-notify .fa.off { color: black; } .over-notify .fa-star { color: gold; } .over-notify .fa-arrow-up { color: #67af2b; } .over-notify .fa-arrow-down { color: #cf0001; } .over-notify .fa-arrow-right, .over-notify .fa-cloud-download { color: DeepPink; } .recommender.load-more-bar.bigimage.image, .recommender.next-in-queue-bar.bigimage.image { width: 506px; } .recommender.next-in-queue-bar.bigimage.image { margin-bottom: 600px; } .recommender.load-more-bar div, .recommender.next-in-queue-bar div { width: 100%; height: 100%; text-align: center; line-height: 50px; } .recommender.load-more a, .recommender.next-in-queue a { cursor: pointer; } .imageinfo.normal.spacer { height: 12px; } .id { margin-right: 2px; padding-left: 2px; padding-right: 2px; } .id:hover { color: white; background: #57a4db; } .add-queue { margin-left: 2px; } .add-queue { cursor: pointer; } .add-queue.queued, .add-queue:hover{ background: #57a4db; color: white; } #similars-title h2 { display: inline-block; } #similars-title .fa-star { color: gold; cursor: help; } ::selection { background: pink; } .queue-all { cursor: pointer; } </style>");
+
+window.runDerpibooruExplorer = function(config) {
+  if (config.DEBUG === false) {
+    console.debug = function() {};
+  }
+  if (config.KEYBOARD_SHORTCUTS === false) {
+    KeyboardJS.on = function() {};
+  }
+  console.debug("Starting Derpibooru Explorer");
+  app = new Router(config);
+  Backbone.history.start({
+    pushState: true,
+    hashChange: false
+  });
+  return console.debug("Derpibooru Explorer started");
+};
